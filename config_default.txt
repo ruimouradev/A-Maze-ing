@@ -1,0 +1,14 @@
+# Default config for A-Maze-ing
+WIDTH=20
+HEIGHT=15
+ENTRY=0,0
+EXIT=19,14
+OUTPUT_FILE=maze.txt
+PERFECT=True
+
+# Bonus-ready extras (optional; safe defaults exist)
+SEED=42
+ALGORITHM=dfs         # dfs|prim|kruskal|wilson (stubs supported)
+DISPLAY=ascii         # ascii (recommended)
+ANIMATE=False         # True -> use iter_steps() if implemented
+STEP_DELAY_MS=25      # for animation
