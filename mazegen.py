@@ -16,7 +16,7 @@
 #
 # BONUS(stubs included):
 #   6) Add 2nd algorithm (Prim) selectable via config: ALGORITHM=prim
-#   7) (Optional) Add Kruskal / Wilson as extra algorithms
+#   7) Add A* solver (2nd resolution algorithm)  <-- to match your "bonus full"
 #   8) Add iter_steps() generator for animation support
 #
 # MUST NOT:
@@ -27,11 +27,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from typing import Optional, Iterator
 
 import random
-
 
 # Wall bits (1 means wall CLOSED)
 N, E, S, W = 1, 2, 4, 8
@@ -75,56 +73,78 @@ class MazeGenerator:
         self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
         self.rng = random.Random(seed)
 
+
+    # TODO STEP 1.1: _in_bounds(...)
+    # TODO STEP 1.2: _open_wall(...)
+    # TODO STEP 1.3: _can_move(...)
+
+
+    # TODO STEP 2: _validate_params(...)
+
+
+    # TODO STEP 3: _generate_dfs(...)
+
+
+    # TODO STEP 4: _generate_prim(...)
+
+
+    # TODO STEP 5: _stamp_42(...)
+
+
+    # TODO STEP 6: _has_forbidden_3x3(...)
+    # TODO STEP 6: _fix_forbidden_3x3(...)
+
     # Required public API
     def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
         """Generate and return a Maze."""
-        # TODO (Rui): implement param validation (bounds, entry!=exit, etc.)
 
-        maze = Maze(self.width, self.height, 
-                    [[15 for _ in range(self.width)] for _ in range(
-                        self.height)])
 
-        # Dispatch by algorithm (bonus-ready)
+        maze = Maze(
+            self.width,
+            self.height,
+            [[15 for _ in range(self.width)] for _ in range(self.height)],
+        )
+
         if self.algorithm in ("dfs", "recursive_backtracker"):
-            # TODO (Rui): implement DFS generation
             pass
         elif self.algorithm == "prim":
-            # TODO (Rui BONUS): implement Prim generation
             pass
         elif self.algorithm == "kruskal":
-            # TODO (Rui BONUS optional): implement Kruskal generation
+            # (opcional) bónus extra
             pass
         elif self.algorithm == "wilson":
-            # TODO (Rui BONUS optional): implement Wilson generation
+            # (opcional) bónus extra
             pass
         else:
-            # Safe fallback
-            # TODO (Rui): treat unknown algorithm as dfs
+            # fallback seguro: tratar como dfs
             pass
 
-        # TODO (Rui): enforce constraints (borders, 42, no 3x3)
         return maze
 
-    def solve(self, maze: Maze, entry: tuple[int, int],
-              exit: tuple[int, int]) -> list[str]:
+
+    def solve(self, maze: Maze, entry: tuple[int, int], exit: tuple[int, int]) -> list[str]:
         """Return shortest path as list of moves like ['N','E',...]."""
-        # TODO (Rui): implement BFS solver
+        # TODO STEP 7: BFS solver
         return []
 
+
+    # TODO STEP 8: solve_astar(...)
+
     # BONUS public API
-    def iter_steps(self, entry: tuple[int, int],
-                   exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
+    def iter_steps(self, entry: tuple[int, int], exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
         """Yield intermediate (maze, path_so_far) states for animation.
 
-        BONUS contract:
-          - If you implement this, renderer can animate generation.
-          - If not implemented, renderer should fall back to static generate().
+        STEP 9 — ANIMAÇÃO (BÓNUS)
+        Objetivo: permitir ao renderer animar geração (ASCII/MLX).
+
+        Implementar:
+          - se implementares DFS step-by-step:
+              - a cada _open_wall(...) faz yield (maze, [])
+          - no fim:
+              - calcula final_path (solve)
+              - yield (maze, final_path)
+
+        Fonte (generators):
+          https://realpython.com/introduction-to-python-generators/
         """
-        # TODO (Rui BONUS): yield steps during generation
-        # Example design:
-        #   maze = init
-        #   for each carve step:
-        #       yield (maze, partial_path_or_empty)
-        #   final_path = solve(maze, entry, exit)
-        #   yield (maze, final_path)
         raise NotImplementedError("iter_steps not implemented (Rui - BONUS).")
