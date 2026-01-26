@@ -153,8 +153,46 @@ class MazeGenerator:
         if entry == exit:
             raise ValueError("Entry and Exit must be different")
 
+    def _generate_dfs(self, maze: Maze, start: tuple[int, int]) -> None:
+        """
+        Generate a perfect maze using DFS (recursive backtracker)
+        starting from start.
+        The maze is assumed to start fully closed (all cells = 15).
+        """
+        # Creating a set to save cells already visited
+        visited: set[tuple[int, int]] = set()
+        # Creat a list where will by saved the path to allow to go back.
+        stack: list[tuple[int, int]] = []
 
-    # TODO STEP 3: _generate_dfs(...)
+        # Start both with the start coordinates
+        visited.add(start)
+        stack.append(start)
+
+        while stack:
+            x, y = stack[-1]
+
+            unvisited_neighbors: list[tuple[int, int, str]] = []
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx = x + dx
+                ny = y + dy
+                if self._in_bounds(nx, ny) and (nx, ny) not in visited:
+                    # Candidate neighbor: in bounds and not visited yet
+                    unvisited_neighbors.append((nx, ny, d))
+            # If dont´s exist we pop (going back)
+            if not unvisited_neighbors:
+                stack.pop()
+                continue
+
+            # Chosing an randow neighord
+            nx, ny, d = self.rng.choice(unvisited_neighbors)
+            # Opening both walls
+            self._open_wall(maze, x, y, d)
+            visited.add((nx, ny))
+            stack.append((nx, ny))
+
+    #
+    # Fonte (DFS maze):
+    #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
 
 
     # TODO STEP 4: _generate_prim(...)
