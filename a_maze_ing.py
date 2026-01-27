@@ -42,8 +42,14 @@ def main(argv: list[str]) -> int:
         print("Usage: python3 a_maze_ing.py config.txt", file=sys.stderr)
         return 2
 
-    # Load configuration from provided file path
-    cfg = load_config(argv[1])
+    try:
+        # Load configuration from provided file path
+        cfg = load_config(argv[1])
+
+    except (FileNotFoundError, ValueError) as e:
+        # Print to stderr as per 42 standards
+        print(f"Error: {e}", file=sys.stderr)
+        return 1  # Exit with a non-zero status
 
     # Create maze generator using config parameters
     gen = MazeGenerator(
