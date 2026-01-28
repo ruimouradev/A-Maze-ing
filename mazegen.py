@@ -25,14 +25,15 @@
 #   - Handle user input
 # ============================================================
 
+# Import type hints
 from __future__ import annotations
-
-from dataclasses import dataclass
 from typing import Optional, Iterator
 
+# Importing library for generating random mazes with the same seed
 import random
 
-# Wall bits (1 means wall CLOSED)
+# Wall bitmask: each bit set to 1 means the corresponding wall is CLOSED.
+# e.g. 9 = 1001 means North + West walls are closed.
 N, E, S, W = 1, 2, 4, 8
 
 # Direction mapping:
@@ -45,16 +46,21 @@ DIRS = {
 }
 
 
-@dataclass
 class Maze:
-    width: int
-    height: int
-    cells: list[list[int]]  # cells[y][x] wall mask 0..15 (closed walls)
+    """Maze grid storing wall bitmasks for each cell (cells[y][x] in 0..15)."""
+
+    def __init__(self, width: int, height: int, cells: list[list[int]]):
+        self.width = width
+        self.height = height
+        # cells[y][x] will have values between 0 and 15 (wall bitmask)
+        self.cells = cells
 
     def get(self, x: int, y: int) -> int:
+        """Return the wall bitmask at coordinates (x, y)."""
         return self.cells[y][x]
 
     def set(self, x: int, y: int, value: int) -> None:
+        """Set the wall bitmask at coordinates (x, y)."""
         self.cells[y][x] = value
 
 
@@ -71,28 +77,54 @@ class MazeGenerator:
         self.height = height
         self.seed = seed
         self.perfect = perfect
+        # Lowercase and trim the algorithm name; default to "dfs" if missing.
         self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
+        # Use a local RNG so that the same seed produces the same maze.
         self.rng = random.Random(seed)
 
-    # ============================================================
-    # STEP 1 — BASE HELPERS (OBRIGATÓRIO)
-    #
-    # Objetivo: nunca quebrar coerência das paredes (passar sempre validator).
-    #
-    # 1.1 Implementar:
-    #   def _in_bounds(self, x: int, y: int) -> bool:
-    #       - True se 0 <= x < width e 0 <= y < height
-    #
-    # 1.2 Implementar:
-    #   def _open_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
-    #       - Abre a parede no lado d da célula (x,y)
-    #       - Abre a parede oposta na célula vizinha
-    #       - Usa DIRS[d] para obter bits e dx/dy
-    #       - NUNCA abrir para fora do bounds (se vizinho fora, não faz nada)
-    #
-    # 1.3 Implementar:
-    #   def _can_move(self, maze: Maze, x: int, y: int, d: str) -> bool:
-    #       - True se não há parede fechada naquele lado e o vizinho existe
+    # Checking if the coordinates are inside the maze.
+    def _in_bounds(self, x: int, y: int) -> bool:
+        """Return True if (x, y) is inside the maze grid."""
+        return 0 <= x < self.width and 0 <= y < self.height
+
+    # Opening both side walls since the maze starts fully closed
+    def _open_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
+        """
+        Open the wall in direction d from (x, y),
+        and open the opposite wall in the neighboring cell.
+        """
+        dx, dy, bit_current, bit_neighbor_opposite = DIRS[d]
+
+        # Calculate the coordinates of the neighboring cell
+        nx = x + dx
+        ny = y + dy
+
+        if not self._in_bounds(nx, ny):
+            return
+
+        # Open the wall by clearing the corresponding bit (~ means NOT)
+        # maze.get returns the current wall bitmask (0..15) for this cell
+        maze.set(x, y, maze.get(x, y) & ~bit_current)
+
+        # Open the opposite wall in the neighboring cell
+        maze.set(nx, ny, maze.get(nx, ny) & ~bit_neighbor_opposite)
+
+    def _can_move(self, maze: Maze, x: int, y: int, d: str) -> bool:
+        """
+        Return True if there is no closed wall in direction d from (x, y)
+        and the neighbor cell exists (is in bounds).
+        """
+        dx, dy, bit_current, _ = DIRS[d]
+        nx = x + dx
+        ny = y + dy
+
+        # Checking if the neighbor exists
+        if not self._in_bounds(nx, ny):
+            return False
+
+        # Wall bit = 1 means closed (cannot move); bit = 0 means open
+        return (maze.get(x, y) & bit_current) == 0
+
     #
     # Fonte (bitmask):
     #   https://www.learncpp.com/cpp-tutorial/bitmasks/
@@ -101,17 +133,14 @@ class MazeGenerator:
     #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
     # ============================================================
 
-    # TODO STEP 1.1: _in_bounds(...)
-    # TODO STEP 1.2: _open_wall(...)
-    # TODO STEP 1.3: _can_move(...)
-
     # ============================================================
     # STEP 2 — VALIDAR PARAMS (OBRIGATÓRIO)
     #
     # Objetivo: falhar cedo com erro claro se config inválido.
     #
     # Implementar:
-    #   def _validate_params(self, entry: tuple[int,int], exit: tuple[int,int]) -> None:
+    #   def _validate_params(self, entry: tuple[int,int],
+    #                           exit: tuple[int,int]) -> None:
     #       - width/height > 0
     #       - entry in bounds
     #       - exit in bounds
@@ -155,7 +184,7 @@ class MazeGenerator:
     #       - lista de arestas/fronteira
     #       - repetir:
     #           - escolher aresta aleatória
-    #           - se liga a célula fora -> _open_wall e adicionar novas fronteiras
+    #           - liga-se a célula fora -> _open_wall e add novas fronteiras
     #
     # Fonte (Prim maze):
     #   https://weblog.jamisbuck.org/2011/1/10/maze-generation-prim-s-algorithm
@@ -175,7 +204,8 @@ class MazeGenerator:
     #       - para cada célula do molde:
     #           - forçar maze.set(x,y,15)
     #           - garantir coerência com vizinhos:
-    #               - se uma célula é forced-closed, o vizinho tem de ter o wall oposto fechado
+    #               - se uma célula é forced-closed,
+    #                   o vizinho tem de ter o wall oposto fechado
     #       - se maze demasiado pequeno -> raise ValueError("...too small...")
     #
     # Fonte (grelhas / offsets):
@@ -207,6 +237,7 @@ class MazeGenerator:
     # -----------------------
     # Required public API
     # -----------------------
+
     def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
         """Generate and return a Maze."""
 
@@ -252,7 +283,10 @@ class MazeGenerator:
     #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
     # ============================================================
 
-    def solve(self, maze: Maze, entry: tuple[int, int], exit: tuple[int, int]) -> list[str]:
+    def solve(self,
+              maze: Maze,
+              entry: tuple[int, int],
+              exit: tuple[int, int]) -> list[str]:
         """Return shortest path as list of moves like ['N','E',...]."""
         # TODO STEP 7: BFS solver
         return []
@@ -261,7 +295,8 @@ class MazeGenerator:
     # STEP 8 — SOLVER A* (BÓNUS: 2º solver)
     #
     # Implementar:
-    #   def solve_astar(self, maze: Maze, entry: tuple[int,int], exit: tuple[int,int]) -> list[str]:
+    #   def solve_astar(self, maze: Maze, entry: tuple[int,int],
+    #                       exit: tuple[int,int]) -> list[str]:
     #       - heurística Manhattan
     #       - priority queue (heapq)
     #       - gscore, prev
@@ -280,7 +315,9 @@ class MazeGenerator:
     # -----------------------
     # BONUS public API
     # -----------------------
-    def iter_steps(self, entry: tuple[int, int], exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
+    def iter_steps(self,
+                   entry: tuple[int, int],
+                   exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
         """Yield intermediate (maze, path_so_far) states for animation.
 
         STEP 9 — ANIMAÇÃO (BÓNUS)
