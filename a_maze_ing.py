@@ -34,7 +34,22 @@ from renderer_ascii import AsciiRenderer  # Terminal ASCII UI
 
 
 def main(argv: list[str]) -> int:
-    # Entry function controlling full program flow
+    """Orchestrate maze generation, solving, and rendering.
+
+    Workflow:
+        1. Parse and validate config file
+        2. Create maze generator with config parameters
+        3. Generate and solve maze
+        4. Write solution to output file
+        5. Launch interactive ASCII renderer
+
+    Args:
+        argv: Command-line arguments; argv[0]=script name,
+            argv[1]=config file path.
+
+    Returns:
+        Exit code: 0 (success), 1 (config/write error), 2 (usage error).
+    """
 
     # Validate CLI usage: exactly one argument expected
     if len(argv) != 2:
@@ -66,13 +81,17 @@ def main(argv: list[str]) -> int:
     path = gen.solve(maze, cfg.entry, cfg.exit)
 
     # Write maze + solution to output file
-    write_output_file(
-        output_path=cfg.output_file,
-        maze=maze,
-        entry=cfg.entry,
-        exit=cfg.exit,
-        path=path,
-    )
+    try:
+        write_output_file(
+            output_path=cfg.output_file,
+            maze=maze,
+            entry=cfg.entry,
+            exit=cfg.exit,
+            path=path,
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     # Launch ASCII renderer (static or animated)
     AsciiRenderer().run(gen=gen, cfg=cfg)
