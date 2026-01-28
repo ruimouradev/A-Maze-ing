@@ -28,6 +28,9 @@
 # Import type hints
 from __future__ import annotations
 from typing import Optional, Iterator
+from collections import deque
+import heapq
+from collections import deque
 
 # Importing library for generating random mazes with the same seed
 import random
@@ -141,7 +144,7 @@ class MazeGenerator:
         Raise ValueError with clear messages if invalid.
         """
         if self.width <= 0 or self.height <= 0:
-            raise ValueError("Width and Height must be greater than 0")
+            raise ValueError("Width and height must be greater than 0")
 
         ex, ey = entry
         tx, ty = exit
@@ -153,7 +156,7 @@ class MazeGenerator:
             raise ValueError(f"Exit out of bounds: {exit}")
 
         if entry == exit:
-            raise ValueError("Entry and Exit must be different")
+            raise ValueError("Entry and exit must be different")
 
     def _generate_dfs(self, maze: Maze, start: tuple[int, int]) -> None:
         """
@@ -163,7 +166,7 @@ class MazeGenerator:
         """
         # Creating a set to save cells already visited
         visited: set[tuple[int, int]] = set()
-        # Creat a list where will by saved the path to allow to go back.
+        # Create a list where will be saved the path to allow going back
         stack: list[tuple[int, int]] = []
 
         # Start both with the start coordinates
@@ -180,12 +183,13 @@ class MazeGenerator:
                 if self._in_bounds(nx, ny) and (nx, ny) not in visited:
                     # Candidate neighbor: in bounds and not visited yet
                     unvisited_neighbors.append((nx, ny, d))
-            # If dont´s exist we pop (going back)
+
+            # If none exist we pop (going back)
             if not unvisited_neighbors:
                 stack.pop()
                 continue
 
-            # Chosing an randow neighord
+            # Choosing a random neighbor
             nx, ny, d = self.rng.choice(unvisited_neighbors)
             # Opening both walls
             self._open_wall(maze, x, y, d)
@@ -199,13 +203,15 @@ class MazeGenerator:
 
     def _generate_prim(self, maze: Maze, start: tuple[int, int]) -> None:
         """
-        Generate a maze Prim's algorithm (randomized Prim) starting from start.
+        Generate a maze using Prim's algorithm(randomized) starting from start.
         The maze is assumed to start fully closed (all cells = 15).
         """
         in_tree: set[tuple[int, int]] = set()
         frontier: list[tuple[int, int, int, int, str]] = []
         # frontier elements: (x, y, nx, ny, d) meaning:
         # from cell (x,y), neighbor (nx,ny) in direction d
+        # in_tree is the set of cells that are part of the maze
+        # frontier is the list of possible connections
 
         def add_frontier(x: int, y: int) -> None:
             """Add edges from (x,y) to all neighbors not yet in the tree."""
@@ -223,7 +229,7 @@ class MazeGenerator:
             x, y, nx, ny, d = self.rng.choice(frontier)
             frontier.remove((x, y, nx, ny, d))
 
-            # If the neighbor is already in the tree, skip (stale edge)
+            # If the neighbor is already in the tree, skip
             if (nx, ny) in in_tree:
                 continue
 
@@ -231,88 +237,192 @@ class MazeGenerator:
             self._open_wall(maze, x, y, d)
             in_tree.add((nx, ny))
             add_frontier(nx, ny)
-    #
-    # Fonte (Prim maze):
-    #   https://weblog.jamisbuck.org/2011/1/10/maze-generation-prim-s-algorithm
-    # ============================================================
 
-    # ============================================================
-    # STEP 5 — CONSTRAINT: "42" pattern (OBRIGATÓRIO)
-    #
-    # Objetivo: desenhar "42" com células totalmente fechadas (valor 15).
-    #
-    # Implementar:
-    #   def _stamp_42(self, maze: Maze) -> None:
-    #       - escolher posição (normalmente centro)
-    #       - aplicar um "molde" (lista de coords) para formar 4 e 2
-    #       - para cada célula do molde:
-    #           - forçar maze.set(x,y,15)
-    #           - garantir coerência com vizinhos:
-    #               - se uma célula é forced-closed,
-    #                   o vizinho tem de ter o wall oposto fechado
-    #       - se maze demasiado pequeno -> raise ValueError("...too small...")
+    def _stamp_42(self, maze: Maze) -> None:
+        """
+        Stamp the "42" into the maze by forcing some cells to be closed (15).
+        Also fixes neighbor walls so no neighbor has an open wall.
+        """
+        # Pattern is 11x7: "4" (5 cols) + 1 col gap + "2" (5 cols)
+        # '.' means "leave as is"; any other char means "force this cell to 15"
+        pattern = [
+            "#...#.#####",
+            "#...#.....#",
+            "#...#.....#",
+            "#####.#####",
+            "....#.#....",
+            "....#.#....",
+            "....#.#####",
+        ]
+
+        pat_h = len(pattern)
+        pat_w = len(pattern[0])
+
+        # If the maze is too small to fit the pattern, fail early
+        if maze.width < pat_w or maze.height < pat_h:
+            raise ValueError("Maze too small for 42 pattern")
+
+        # Center the pattern in the maze
+        ox = (maze.width - pat_w) // 2
+        oy = (maze.height - pat_h) // 2
+
+        for py in range(pat_h):
+            row = pattern[py]
+            for px in range(pat_w):
+                if row[px] == ".":
+                    continue
+
+                x = ox + px
+                y = oy + py
+
+                # Force this cell to be fully closed (all walls closed)
+                maze.set(x, y, 15)
+
+                # Fix neighbors so nobody has open walls into this closed cell
+                for d, (dx, dy, _bit_current,
+                        bit_neighbor_opposite) in DIRS.items():
+                    nx = x + dx
+                    ny = y + dy
+                    if not self._in_bounds(nx, ny):
+                        continue
+
+                    # Ensure the neighbor has its wall facing (x,y) CLOSED
+                    neighbor = maze.get(nx, ny)
+                    maze.set(nx, ny, neighbor | bit_neighbor_opposite)
+
     #
     # Fonte (grelhas / offsets):
     #   https://www.redblobgames.com/grids/intro/
     # ============================================================
 
-    # TODO STEP 5: _stamp_42(...)
-
     # ============================================================
     # STEP 6 — CONSTRAINT: "no 3x3 open area" (OBRIGATÓRIO)
     #
-    # Objetivo: evitar áreas abertas grandes.
+    # Critério prático (simples e objetivo):
+    #   Um 3x3 é proibido se TODOS os 12 corredores internos estiverem abertos:
+    #     - 6 horizontais (3 rows * 2)
+    #     - 6 verticais   (3 cols * 2)
     #
-    # Implementar (abordagem prática):
-    #   def _has_forbidden_3x3(self, maze: Maze) -> bool:
-    #       - varrer todas as janelas 3x3
-    #       - definir critério "aberto demais" (o vosso)
-    #
-    #   def _fix_forbidden_3x3(self, maze: Maze) -> None:
-    #       - se encontrar violação, fechar UMA passagem (mantendo coerência)
+    # Fix:
+    #   Quando encontrar um 3x3 proibido,
+    # fechar UMA passagem interna (coerente),
+    #   usando uma função _close_wall (fecha dos dois lados).
+    # ============================================================
+
+    def _close_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
+        """
+        Close the wall in direction d from (x, y),
+        and close the opposite wall in the neighboring cell.
+        """
+        dx, dy, bit_current, bit_neighbor_opposite = DIRS[d]
+        nx = x + dx
+        ny = y + dy
+
+        if not self._in_bounds(nx, ny):
+            return
+
+        # Set bit to 1 -> wall closed on both sides
+        maze.set(x, y, maze.get(x, y) | bit_current)
+        maze.set(nx, ny, maze.get(nx, ny) | bit_neighbor_opposite)
+
+    def _has_forbidden_3x3(self, maze: Maze) -> bool:
+        """
+        Return True if there exists a 3x3 window that is "too open"
+        according to our criterion.
+        """
+        for y0 in range(0, maze.height - 2):
+            for x0 in range(0, maze.width - 2):
+                all_open = True
+
+                # Check horizontal internal corridors inside the 3x3
+                for y in range(y0, y0 + 3):
+                    for x in range(x0, x0 + 2):
+                        if not self._can_move(maze, x, y, "E"):
+                            all_open = False
+                            break
+                    if not all_open:
+                        break
+
+                if not all_open:
+                    continue
+
+                # Check vertical internal corridors inside the 3x3
+                for x in range(x0, x0 + 3):
+                    for y in range(y0, y0 + 2):
+                        if not self._can_move(maze, x, y, "S"):
+                            all_open = False
+                            break
+                    if not all_open:
+                        break
+
+                if all_open:
+                    return True
+
+        return False
+
+    def _fix_forbidden_3x3(self, maze: Maze) -> None:
+        """
+        Fix the first forbidden 3x3 found by closing ONE internal passage.
+        """
+        for y0 in range(0, maze.height - 2):
+            for x0 in range(0, maze.width - 2):
+                all_open = True
+
+                for y in range(y0, y0 + 3):
+                    for x in range(x0, x0 + 2):
+                        if not self._can_move(maze, x, y, "E"):
+                            all_open = False
+                            break
+                    if not all_open:
+                        break
+
+                if not all_open:
+                    continue
+
+                for x in range(x0, x0 + 3):
+                    for y in range(y0, y0 + 2):
+                        if not self._can_move(maze, x, y, "S"):
+                            all_open = False
+                            break
+                    if not all_open:
+                        break
+
+                if not all_open:
+                    continue
+
+                # Found a forbidden 3x3: pick a simple internal wall to close.
+                # We try center->right first, else center->down,
+                # else any internal open wall.
+                cx, cy = x0 + 1, y0 + 1
+
+                if self._can_move(maze, cx, cy, "E"):
+                    self._close_wall(maze, cx, cy, "E")
+                    return
+
+                if self._can_move(maze, cx, cy, "S"):
+                    self._close_wall(maze, cx, cy, "S")
+                    return
+
+                # Fallback: close any internal open edge inside that 3x3
+                for y in range(y0, y0 + 3):
+                    for x in range(x0, x0 + 2):
+                        if self._can_move(maze, x, y, "E"):
+                            self._close_wall(maze, x, y, "E")
+                            return
+
+                for x in range(x0, x0 + 3):
+                    for y in range(y0, y0 + 2):
+                        if self._can_move(maze, x, y, "S"):
+                            self._close_wall(maze, x, y, "S")
+                            return
+
+        # Nothing to fix
+        return
+
     #
     # Fonte (flood fill / áreas):
     #   https://www.geeksforgeeks.org/flood-fill-algorithm/
     # ============================================================
-
-    # TODO STEP 6: _has_forbidden_3x3(...)
-    # TODO STEP 6: _fix_forbidden_3x3(...)
-
-    # -----------------------
-    # Required public API
-    # -----------------------
-
-    def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
-        """Generate and return a Maze."""
-
-        # STEP 2: chamar _validate_params(entry, exit)
-
-        maze = Maze(
-            self.width,
-            self.height,
-            [[15 for _ in range(self.width)] for _ in range(self.height)],
-        )
-
-        # STEP 3/4: dispatch por algoritmo
-        if self.algorithm in ("dfs", "recursive_backtracker"):
-            # STEP 3: self._generate_dfs(maze, start=entry)
-            pass
-        elif self.algorithm == "prim":
-            # STEP 4: self._generate_prim(maze, start=entry)
-            pass
-        elif self.algorithm == "kruskal":
-            # (opcional) bónus extra
-            pass
-        elif self.algorithm == "wilson":
-            # (opcional) bónus extra
-            pass
-        else:
-            # fallback seguro: tratar como dfs
-            pass
-
-        # STEP 5: self._stamp_42(maze)
-        # STEP 6: garantir regra 3x3 (check + fix)
-        return maze
 
     # ============================================================
     # STEP 7 — SOLVER BFS (MANDATORY: caminho mais curto)
@@ -320,11 +430,8 @@ class MazeGenerator:
     # Implementar BFS em grelha usando paredes:
     #   - queue (deque)
     #   - visited
-    #   - prev[(x,y)] = (px,py,dir)
+    #   - prev[(x,y)] = ((px,py),dir)
     #   - reconstruir lista ['N','E','S','W']
-    #
-    # Fonte (BFS em grids):
-    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
     # ============================================================
 
     def solve(self,
@@ -332,49 +439,198 @@ class MazeGenerator:
               entry: tuple[int, int],
               exit: tuple[int, int]) -> list[str]:
         """Return shortest path as list of moves like ['N','E',...]."""
-        # TODO STEP 7: BFS solver
-        return []
+        q: deque[tuple[int, int]] = deque()
+        visited: set[tuple[int, int]] = set()
+        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
+
+        q.append(entry)
+        visited.add(entry)
+
+        while q:
+            x, y = q.popleft()
+
+            if (x, y) == exit:
+                break
+
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                if not self._can_move(maze, x, y, d):
+                    continue
+
+                nx = x + dx
+                ny = y + dy
+                nxt = (nx, ny)
+
+                if nxt in visited:
+                    continue
+
+                visited.add(nxt)
+                prev[nxt] = ((x, y), d)
+                q.append(nxt)
+
+        # If exit not reached, no path
+        if exit not in visited:
+            return []
+
+        # Reconstruct path exit -> entry
+        path: list[str] = []
+        cur = exit
+        while cur != entry:
+            (px, py), d = prev[cur]
+            path.append(d)
+            cur = (px, py)
+
+        path.reverse()
+        return path
+
+    #
+    # Fonte (BFS em grids):
+    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
+    # ============================================================
 
     # ============================================================
     # STEP 8 — SOLVER A* (BÓNUS: 2º solver)
     #
     # Implementar:
-    #   def solve_astar(self, maze: Maze, entry: tuple[int,int],
-    #                       exit: tuple[int,int]) -> list[str]:
-    #       - heurística Manhattan
-    #       - priority queue (heapq)
-    #       - gscore, prev
-    #       - reconstruir lista ['N','E','S','W']
-    #
-    # Depois decidir como selecionar:
-    #   - OU adicionam SOLVER=... no config (Alexandre)
-    #   - OU deixam A* como função extra chamada manualmente (menos ideal)
+    #   - heurística Manhattan
+    #   - priority queue (heapq)
+    #   - gscore, prev
+    #   - reconstruir lista ['N','E','S','W']
+    # ============================================================
+
+    def solve_astar(self,
+                    maze: Maze,
+                    entry: tuple[int, int],
+                    exit: tuple[int, int]) -> list[str]:
+        """
+        Return a path using A* (Manhattan heuristic) as list
+        of moves like ['N','E',...].
+        """
+
+        def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+        # heap item: (fscore, gscore, node)
+        open_heap: list[tuple[int, int, tuple[int, int]]] = []
+        gscore: dict[tuple[int, int], int] = {entry: 0}
+        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
+
+        heapq.heappush(open_heap, (manhattan(entry, exit), 0, entry))
+        closed: set[tuple[int, int]] = set()
+
+        while open_heap:
+            _f, g, (x, y) = heapq.heappop(open_heap)
+
+            if (x, y) in closed:
+                continue
+            closed.add((x, y))
+
+            if (x, y) == exit:
+                break
+
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                if not self._can_move(maze, x, y, d):
+                    continue
+
+                nx = x + dx
+                ny = y + dy
+                nxt = (nx, ny)
+
+                tentative_g = g + 1
+                if nxt in gscore and tentative_g >= gscore[nxt]:
+                    continue
+
+                gscore[nxt] = tentative_g
+                prev[nxt] = ((x, y), d)
+
+                fscore = tentative_g + manhattan(nxt, exit)
+                heapq.heappush(open_heap, (fscore, tentative_g, nxt))
+
+        # If no path found
+        if entry != exit and exit not in prev:
+            return []
+
+        # Reconstruct path
+        path: list[str] = []
+        cur = exit
+        while cur != entry:
+            (px, py), d = prev[cur]
+            path.append(d)
+            cur = (px, py)
+        path.reverse()
+        return path
+
     #
     # Fonte (A*):
     #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
     # ============================================================
 
-    # TODO STEP 8: solve_astar(...)
+    # ============================================================
+    # STEP 9 — ANIMAÇÃO (BÓNUS)
+    #
+    # Objetivo: permitir ao renderer animar geração (ASCII/MLX).
+    #
+    # Abordagem prática:
+    #   - duplicar a lógica do DFS aqui
+    #   - a cada _open_wall(...) fazer yield (maze, [])
+    #   - no fim calcular final_path (solve) e yield (maze, final_path)
+    # ============================================================
 
-    # -----------------------
-    # BONUS public API
-    # -----------------------
     def iter_steps(self,
                    entry: tuple[int, int],
                    exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
-        """Yield intermediate (maze, path_so_far) states for animation.
+        """Yield intermediate (maze, path_so_far) states for animation."""
+        self._validate_params(entry, exit)
 
-        STEP 9 — ANIMAÇÃO (BÓNUS)
-        Objetivo: permitir ao renderer animar geração (ASCII/MLX).
+        maze = Maze(
+            self.width,
+            self.height,
+            [[15 for _ in range(self.width)] for _ in range(self.height)],
+        )
 
-        Implementar:
-          - se implementares DFS step-by-step:
-              - a cada _open_wall(...) faz yield (maze, [])
-          - no fim:
-              - calcula final_path (solve)
-              - yield (maze, final_path)
+        # Step-by-step DFS generation
+        visited: set[tuple[int, int]] = set()
+        stack: list[tuple[int, int]] = []
 
-        Fonte (generators):
-          https://realpython.com/introduction-to-python-generators/
-        """
-        raise NotImplementedError("iter_steps not implemented (Rui - BONUS).")
+        visited.add(entry)
+        stack.append(entry)
+
+        while stack:
+            x, y = stack[-1]
+
+            unvisited_neighbors: list[tuple[int, int, str]] = []
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx = x + dx
+                ny = y + dy
+                if self._in_bounds(nx, ny) and (nx, ny) not in visited:
+                    unvisited_neighbors.append((nx, ny, d))
+
+            if not unvisited_neighbors:
+                stack.pop()
+                continue
+
+            nx, ny, d = self.rng.choice(unvisited_neighbors)
+            self._open_wall(maze, x, y, d)
+
+            # Yield after carving a passage so renderer can animate
+            yield (maze, [])
+
+            visited.add((nx, ny))
+            stack.append((nx, ny))
+
+        # After generation, apply constraints (you can also yield if you want)
+        self._stamp_42(maze)
+
+        # STEP 6: fix 3x3 areas until it's clean (safe limit)
+        for _ in range(self.width * self.height):
+            if not self._has_forbidden_3x3(maze):
+                break
+            self._fix_forbidden_3x3(maze)
+
+        # Final solve and yield solution
+        final_path = self.solve(maze, entry, exit)
+        yield (maze, final_path)
+
+    #
+    # Fonte (generators):
+    #   https://realpython.com/introduction-to-python-generators/
+    # ============================================================
