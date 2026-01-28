@@ -197,22 +197,44 @@ class MazeGenerator:
     #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
     # ============================================================
 
-    # ============================================================
-    # STEP 4 — GERAÇÃO PRIM (BÓNUS: 2º algoritmo de geração)
-    #
-    # Implementar:
-    #   def _generate_prim(self, maze: Maze, start: tuple[int,int]) -> None:
-    #       - conjunto de células "na árvore"
-    #       - lista de arestas/fronteira
-    #       - repetir:
-    #           - escolher aresta aleatória
-    #           - liga-se a célula fora -> _open_wall e add novas fronteiras
+    def _generate_prim(self, maze: Maze, start: tuple[int, int]) -> None:
+        """
+        Generate a maze Prim's algorithm (randomized Prim) starting from start.
+        The maze is assumed to start fully closed (all cells = 15).
+        """
+        in_tree: set[tuple[int, int]] = set()
+        frontier: list[tuple[int, int, int, int, str]] = []
+        # frontier elements: (x, y, nx, ny, d) meaning:
+        # from cell (x,y), neighbor (nx,ny) in direction d
+
+        def add_frontier(x: int, y: int) -> None:
+            """Add edges from (x,y) to all neighbors not yet in the tree."""
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx, ny = x + dx, y + dy
+                if self._in_bounds(nx, ny) and (nx, ny) not in in_tree:
+                    frontier.append((x, y, nx, ny, d))
+
+        sx, sy = start
+        in_tree.add((sx, sy))
+        add_frontier(sx, sy)
+
+        while frontier:
+            # Choose a random frontier edge
+            x, y, nx, ny, d = self.rng.choice(frontier)
+            frontier.remove((x, y, nx, ny, d))
+
+            # If the neighbor is already in the tree, skip (stale edge)
+            if (nx, ny) in in_tree:
+                continue
+
+            # Carve the passage and add the new cell to the tree
+            self._open_wall(maze, x, y, d)
+            in_tree.add((nx, ny))
+            add_frontier(nx, ny)
     #
     # Fonte (Prim maze):
     #   https://weblog.jamisbuck.org/2011/1/10/maze-generation-prim-s-algorithm
     # ============================================================
-
-    # TODO STEP 4: _generate_prim(...)
 
     # ============================================================
     # STEP 5 — CONSTRAINT: "42" pattern (OBRIGATÓRIO)
