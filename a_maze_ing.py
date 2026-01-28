@@ -94,7 +94,14 @@ def main(argv: list[str]) -> int:
         return 1
 
     # Launch ASCII renderer (static or animated)
-    AsciiRenderer().run(gen=gen, cfg=cfg)
+    try:
+        AsciiRenderer().run(maze=maze, path=path, gen=gen, cfg=cfg)
+    except (KeyboardInterrupt, ValueError) as e:
+        if isinstance(e, KeyboardInterrupt):
+            print("\nProgram interrupted by user.", file=sys.stderr)
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     return 0
 
