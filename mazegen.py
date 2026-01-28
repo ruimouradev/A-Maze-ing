@@ -133,23 +133,27 @@ class MazeGenerator:
     #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
     # ============================================================
 
-    # ============================================================
-    # STEP 2 — VALIDAR PARAMS (OBRIGATÓRIO)
-    #
-    # Objetivo: falhar cedo com erro claro se config inválido.
-    #
-    # Implementar:
-    #   def _validate_params(self, entry: tuple[int,int],
-    #                           exit: tuple[int,int]) -> None:
-    #       - width/height > 0
-    #       - entry in bounds
-    #       - exit in bounds
-    #       - entry != exit
-    #
-    # Nota: tu lanças ValueError; o Alexandre é que imprime bonito.
-    # ============================================================
+    def _validate_params(self,
+                         entry: tuple[int, int],
+                         exit: tuple[int, int]) -> None:
+        """
+        Validate entry and exit parameters.
+        Raise ValueError with clear messages if invalid.
+        """
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError("Width and Height must be greater than 0")
 
-    # TODO STEP 2: _validate_params(...)
+        ex, ey = entry
+        tx, ty = exit
+
+        if not self._in_bounds(ex, ey):
+            raise ValueError(f"Entry out of bounds: {entry}")
+
+        if not self._in_bounds(tx, ty):
+            raise ValueError(f"Exit out of bounds: {exit}")
+
+        if entry == exit:
+            raise ValueError("Entry and Exit must be different")
 
     # ============================================================
     # STEP 3 — GERAÇÃO DFS (MANDATORY)
