@@ -77,6 +77,7 @@ class MazeGenerator:
         seed: Optional[int],
         perfect: bool,
         algorithm: str = "dfs",
+        density: float = 0.06,
     ) -> None:
         self.width = width
         self.height = height
@@ -86,6 +87,9 @@ class MazeGenerator:
         self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
         # Use a local RNG so that the same seed produces the same maze.
         self.rng = random.Random(seed)
+
+        # Density is used only when perfect=False (to create loops).
+        self.density = density
 
     # Checking if the coordinates are inside the maze.
     def _in_bounds(self, x: int, y: int) -> bool:
@@ -131,10 +135,10 @@ class MazeGenerator:
         return (maze.get(x, y) & bit_current) == 0
 
     #
-    # Fonte (bitmask):
+    # Source (bitmask):
     #   https://www.learncpp.com/cpp-tutorial/bitmasks/
     #
-    # Fonte (maze/grafo):
+    # Source (maze/graph):
     #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
 
     def _validate_params(
@@ -210,7 +214,7 @@ class MazeGenerator:
             stack.append((nx, ny))
 
     #
-    # Fonte (DFS maze):
+    # Source (DFS maze):
     #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
 
     def _generate_prim(
@@ -264,8 +268,8 @@ class MazeGenerator:
 
     def _get_42_coords(self, maze: Maze) -> set[tuple[int, int]]:
         """Return coordinates of a centered '42' pattern (size-aware)."""
-        # Use multiple base patterns. This allows a smaller "42" in small
-        # mazes, because scale cannot go below 1 with integer cells.
+        # We use multiple patterns so the "42" can be smaller on small mazes.
+        # Scale cannot go below 1 with integer cells, so pattern choice matters.
 
         pat_small = [
             "#.#.###",
@@ -316,7 +320,7 @@ class MazeGenerator:
         # Scale only for very large mazes, otherwise it becomes too big.
         max_scale = min(avail_w // base_w, avail_h // base_h)
         scale = 1
-        if maze.width >= 80 and maze.height >= 55:
+        if maze.width >= 90 and maze.height >= 60:
             scale = min(2, max_scale)
 
         stamp_w = base_w * scale
@@ -464,6 +468,61 @@ class MazeGenerator:
         # Nothing to fix
         return
 
+    # PERFECT=False support (non-perfect maze with loops)
+    #
+    # Idea:
+    #   - Generate a perfect maze first (tree)
+    #   - Then open extra random walls to create loops
+    #   - Keep coherence and avoid the 42 blocked cells
+
+    def _add_loops(
+        self,
+        maze: Maze,
+        blocked: set[tuple[int, int]],
+        density: float,
+    ) -> None:
+        """
+        Open extra walls randomly to create loops (non-perfect maze).
+
+        density is relative to the number of cells.
+        Example: 0.06 means about 6% of cells try to open one extra wall.
+        """
+        if density <= 0.0:
+            return
+
+        attempts = int(self.width * self.height * density)
+        if attempts < 1:
+            return
+
+        dirs = list(DIRS.keys())
+
+        for _ in range(attempts):
+            x = self.rng.randrange(self.width)
+            y = self.rng.randrange(self.height)
+
+            if (x, y) in blocked:
+                continue
+
+            d = self.rng.choice(dirs)
+            dx, dy, _bit_current, _bit_opp = DIRS[d]
+            nx = x + dx
+            ny = y + dy
+
+            if not self._in_bounds(nx, ny):
+                continue
+            if (nx, ny) in blocked:
+                continue
+
+            # Only open if currently closed
+            if self._can_move(maze, x, y, d):
+                continue
+
+            self._open_wall(maze, x, y, d)
+
+            # Keep the 3x3 rule safe: if forbidden, revert this opening.
+            if self._has_forbidden_3x3(maze):
+                self._close_wall(maze, x, y, d)
+
     # Required public API
 
     def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
@@ -490,6 +549,10 @@ class MazeGenerator:
             self._generate_prim(maze, start=entry, blocked=blocked)
         else:
             self._generate_dfs(maze, start=entry, blocked=blocked)
+
+        # If perfect is False, open extra walls to create loops.
+        if not self.perfect:
+            self._add_loops(maze, blocked=blocked, density=self.density)
 
         self._stamp_42(maze, blocked)
 
@@ -638,7 +701,7 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation
+        # Step-by-step DFS generation (animation uses DFS for now)
         visited: set[tuple[int, int]] = set()
         stack: list[tuple[int, int]] = []
 
@@ -672,6 +735,11 @@ class MazeGenerator:
 
             visited.add((nx, ny))
             stack.append((nx, ny))
+
+        # If perfect is False, add loops (optional for animation)
+        if not self.perfect:
+            self._add_loops(maze, blocked=blocked, density=self.density)
+            yield (maze, [])
 
         # Apply constraints after generation
         self._stamp_42(maze, blocked)
