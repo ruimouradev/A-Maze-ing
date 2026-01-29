@@ -31,14 +31,18 @@
 
 from __future__ import annotations
 
+import sys
+import time
 from config import Config
 from mazegen import MazeGenerator, Maze
+from serializer import write_output_file
 
 
 class AsciiRenderer:
     def __init__(self) -> None:
         """Initialize renderer with path visibility and wall color palette."""
         self.show_path = True
+        self.animate = False  # Toggle animation on/off
         # Wall colors that don't conflict with entry (green) or exit (red)
         self.wall_colors = [
             "\033[0m",   # Default (white)
@@ -49,6 +53,7 @@ class AsciiRenderer:
         ]
         self.color_index = 0
         self.wall_color = self.wall_colors[0]
+        self.animation_speed = 0.01  # 10ms per frame
 
     def _draw_maze(
         self, maze: Maze, cfg: Config, path: list[str]
@@ -68,12 +73,18 @@ class AsciiRenderer:
         ENTRY_COLOR = "\033[32m"      # Green
         EXIT_COLOR = "\033[31m"       # Red
         PATH_COLOR = "\033[96m"       # Bright cyan for solution path
+        STAMP_COLOR = "\033[93m"      # Bright yellow for the 42 stamp
         RESET = "\033[0m"             # reset color to default
 
         BLOCK = "█"
 
         # Convert path directions to coordinates
         path_coords = set()
+        stamp_coords: set[tuple[int, int]] = getattr(
+            maze, "stamp42", set()
+        )
+        has_stamp = bool(stamp_coords)
+
         if self.show_path and path:
             x, y = cfg.entry
             path_coords.add((x, y))  # Include entry in path
@@ -90,6 +101,8 @@ class AsciiRenderer:
                     # Skip invalid directions
                     continue
                 path_coords.add((x, y))
+            # Ensure exit is in path_coords
+            path_coords.add(cfg.exit)
 
         # loops through all lines of the maze, one at a time
         for y, row in enumerate(maze.cells):
@@ -99,11 +112,14 @@ class AsciiRenderer:
 
             # loop that processes 1 line (prints 3 x 3 blocks)
             for x, cell_value in enumerate(row):
-                # 1. Determine Center Color (Entry vs Exit vs Path)
+                # 1. Determine Center Color (Entry vs Exit vs Stamp vs Path)
                 if (x, y) == cfg.entry:
                     center_char = f"{ENTRY_COLOR}{BLOCK}{RESET}"
                 elif (x, y) == cfg.exit:
                     center_char = f"{EXIT_COLOR}{BLOCK}{RESET}"
+                elif has_stamp and (x, y) in stamp_coords:
+                    # Highlight the 42 stamp cells (if present)
+                    center_char = f"{STAMP_COLOR}{BLOCK}{RESET}"
                 elif (x, y) in path_coords:
                     # Show path cell in bright cyan
                     center_char = f"{PATH_COLOR}{BLOCK}{RESET}"
@@ -143,6 +159,42 @@ class AsciiRenderer:
             print(line_mid)
             print(line_bot)
 
+    def _animate_maze(
+        self, gen: MazeGenerator, cfg: Config
+    ) -> tuple[Maze, list[str]]:
+        """Animate maze generation step-by-step using iter_steps().
+
+        Yields intermediate maze states from the generator, rendering each
+        frame with a slight delay for visual effect.
+
+        Args:
+            gen: Maze generator engine with iter_steps() method.
+            cfg: Configuration with entry/exit coordinates.
+
+        Returns:
+            Tuple of (final_maze, solution_path).
+        """
+        final_maze: Maze | None = None
+        final_path: list[str] = []
+
+        # Iterate through maze generation steps
+        for step_maze, step_path in gen.iter_steps(cfg.entry, cfg.exit):
+            # Clear terminal and draw current generation state
+            print("\033[H\033[J", end="")
+            self._draw_maze(step_maze, cfg, step_path)
+
+            # Store the final state
+            final_maze = step_maze
+            final_path = step_path
+
+            # Small delay so animation is visible (not instant)
+            time.sleep(self.animation_speed)
+
+        # iter_steps() always yields at least once, so final_maze won't be None
+        # raises an AssertionError and stops execution
+        assert final_maze is not None, "No maze state generated"
+        return final_maze, final_path
+
     def run(
         self,
         maze: Maze,
@@ -153,9 +205,10 @@ class AsciiRenderer:
         """Render maze and handle interactive commands in main event loop.
 
         Commands:
-            (r)egenerate - Create and solve new maze
+            (r)egenerate - Create and solve new maze (instant or animated)
             (p)ath - Toggle solution path display
             (c)olor - Cycle wall color
+            (a)nimation - Toggle maze generation animation
             (q)uit - Exit program
 
         Args:
@@ -175,8 +228,10 @@ class AsciiRenderer:
             self._draw_maze(current_maze, cfg, current_path)
 
             # 3. Handle interaction
+            anim_status = " [ANIMATED]" if self.animate else ""
             cmd = input(
-                "\n(r)egenerate, (p)ath, (c)olor, (q)uit: "
+                f"\n(r)egenerate, (p)ath, (c)olor, "
+                f"(a)nimation{anim_status}, (q)uit: "
             ).lower()
 
             if cmd == 'q':
@@ -189,11 +244,35 @@ class AsciiRenderer:
                     (self.color_index + 1) % len(self.wall_colors)
                 )
                 self.wall_color = self.wall_colors[self.color_index]
+            elif cmd == 'a':
+                # Toggle animation on/off
+                self.animate = not self.animate
             elif cmd == 'r':
+                # Clear terminal before regeneration
+                print("\033[H\033[J", end="")
+                print("Regenerating maze...")
+                
                 # Use the generator engine to create a NEW maze
-                current_maze = gen.generate(cfg.entry, cfg.exit)
-                # Solve the new maze and update path
-                current_path = gen.solve(
-                    current_maze, cfg.entry, cfg.exit
-                )
-            # Add other logic for animation and algorithm changes
+                if self.animate:
+                    # Animate the generation step-by-step
+                    current_maze, current_path = self._animate_maze(
+                        gen, cfg
+                    )
+                else:
+                    # Generate maze instantly
+                    current_maze = gen.generate(cfg.entry, cfg.exit)
+                    # Solve the new maze and update path
+                    current_path = gen.solve(
+                        current_maze, cfg.entry, cfg.exit
+                    )
+                # Write the regenerated maze to output file
+                try:
+                    write_output_file(
+                        output_path=cfg.output_file,
+                        maze=current_maze,
+                        entry=cfg.entry,
+                        exit=cfg.exit,
+                        path=current_path,
+                    )
+                except ValueError as e:
+                    print(f"\nError writing file: {e}", file=sys.stderr)
