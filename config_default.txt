@@ -12,3 +12,4 @@ ALGORITHM=dfs         # dfs|prim|kruskal|wilson (stubs supported)
 DISPLAY=ascii         # ascii (recommended)
 ANIMATE=False         # True -> use iter_steps() if implemented
 STEP_DELAY_MS=25      # for animation
+DENSITY=0.06          # float between 0.0 and 1.0

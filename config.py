@@ -48,6 +48,7 @@ class Config:
     display: str = "ascii"
     animate: bool = False
     step_delay_ms: int = 25
+    density: float = 0.06
 
 
 # Alexandre (B) TODO: All done
@@ -68,6 +69,19 @@ def _parse_bool(value: str) -> bool:
     if val in ("false", "0", "no", "off"):
         return False
     raise ValueError(f"Invalid boolean value: {value}")
+
+
+def _parse_density(value: str) -> float:
+    """Converts string value to float and validates 0.0 <= x <= 1.0."""
+    try:
+        density = float(value)
+        if not (0.0 <= density <= 1.0):
+            msg = f"Density must be between 0.0 and 1.0, got {density}"
+            raise ValueError(msg)
+        return density
+    except (ValueError, TypeError):
+        msg = f"Invalid density value (expected float 0.0-1.0): {value}"
+        raise ValueError(msg)
 
 
 def _parse_coord(value: str) -> tuple[int, int]:
@@ -172,7 +186,8 @@ def load_config(path: str) -> Config:
             algorithm=data.get("ALGORITHM", "dfs").lower(),
             display=data.get("DISPLAY", "ascii").lower(),
             animate=_parse_bool(data.get("ANIMATE", "False")),
-            step_delay_ms=int(data.get("STEP_DELAY_MS", 25))
+            step_delay_ms=int(data.get("STEP_DELAY_MS", 25)),
+            density=_parse_density(data.get("DENSITY", "0.06"))
         )
 
     except ValueError as e:
