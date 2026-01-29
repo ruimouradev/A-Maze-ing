@@ -29,7 +29,6 @@ from __future__ import annotations
 from typing import Optional, Iterator
 from collections import deque
 import heapq
-from collections import deque
 
 # Importing library for generating random mazes with the same seed
 import random
@@ -56,6 +55,10 @@ class Maze:
         self.height = height
         # cells[y][x] will have values between 0 and 15 (wall bitmask)
         self.cells = cells
+
+        # This will store the coordinates of the 42 pattern.
+        # This is better than assuming "cell == 15" means it belongs to the 42.
+        self.stamp42: set[tuple[int, int]] = set()
 
     def get(self, x: int, y: int) -> int:
         """Return the wall bitmask at coordinates (x, y)."""
@@ -200,7 +203,8 @@ class MazeGenerator:
 
     def _generate_prim(self, maze: Maze, start: tuple[int, int]) -> None:
         """
-        Generate a maze using Prim's algorithm(randomized) starting from start.
+        Generate a maze using Prim's algorithm (randomized)
+        starting from start.
         The maze is assumed to start fully closed (all cells = 15).
         """
         in_tree: set[tuple[int, int]] = set()
@@ -223,8 +227,8 @@ class MazeGenerator:
 
         while frontier:
             # Choose a random frontier edge
-            x, y, nx, ny, d = self.rng.choice(frontier)
-            frontier.remove((x, y, nx, ny, d))
+            i = self.rng.randrange(len(frontier))
+            x, y, nx, ny, d = frontier.pop(i)
 
             # If the neighbor is already in the tree, skip
             if (nx, ny) in in_tree:
@@ -234,6 +238,7 @@ class MazeGenerator:
             self._open_wall(maze, x, y, d)
             in_tree.add((nx, ny))
             add_frontier(nx, ny)
+
 
     def _stamp_42(self, maze: Maze) -> None:
         """
@@ -263,6 +268,9 @@ class MazeGenerator:
         ox = (maze.width - pat_w) // 2
         oy = (maze.height - pat_h) // 2
 
+        # Save coords of the 42 pattern so Alexandre can color it safely
+        maze.stamp42.clear()
+
         for py in range(pat_h):
             row = pattern[py]
             for px in range(pat_w):
@@ -271,6 +279,9 @@ class MazeGenerator:
 
                 x = ox + px
                 y = oy + py
+
+                # Save this cell as part of the 42
+                maze.stamp42.add((x, y))
 
                 # Force this cell to be fully closed (all walls closed)
                 maze.set(x, y, 15)
@@ -286,10 +297,6 @@ class MazeGenerator:
                     # Ensure the neighbor has its wall facing (x,y) CLOSED
                     neighbor = maze.get(nx, ny)
                     maze.set(nx, ny, neighbor | bit_neighbor_opposite)
-
-    #
-    # Fonte (grelhas / offsets):
-    #   https://www.redblobgames.com/grids/intro/
 
 
     def _close_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
@@ -402,9 +409,33 @@ class MazeGenerator:
         # Nothing to fix
         return
 
-    #
-    # Fonte (flood fill / áreas):
-    #   https://www.geeksforgeeks.org/flood-fill-algorithm/
+    # Required public API
+
+    def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
+        """Generate and return a Maze."""
+        self._validate_params(entry, exit)
+
+        maze = Maze(
+            self.width,
+            self.height,
+            [[15 for _ in range(self.width)] for _ in range(self.height)],
+        )
+
+        if self.algorithm in ("dfs", "recursive_backtracker"):
+            self._generate_dfs(maze, start=entry)
+        elif self.algorithm == "prim":
+            self._generate_prim(maze, start=entry)
+        else:
+            self._generate_dfs(maze, start=entry)
+
+        self._stamp_42(maze)
+
+        for _ in range(self.width * self.height):
+            if not self._has_forbidden_3x3(maze):
+                break
+            self._fix_forbidden_3x3(maze)
+
+        return maze
 
 
     def solve(self,
@@ -454,10 +485,6 @@ class MazeGenerator:
 
         path.reverse()
         return path
-
-    #
-    # Fonte (BFS em grids):
-    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
 
 
     def solve_astar(self,
@@ -522,10 +549,6 @@ class MazeGenerator:
         path.reverse()
         return path
 
-    #
-    # Fonte (A*):
-    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
-
 
     def iter_steps(self,
                    entry: tuple[int, int],
@@ -569,7 +592,7 @@ class MazeGenerator:
             visited.add((nx, ny))
             stack.append((nx, ny))
 
-        # After generation, apply constraints (you can also yield if you want)
+        # Apply constraints after generation
         self._stamp_42(maze)
 
         for _ in range(self.width * self.height):
@@ -580,7 +603,3 @@ class MazeGenerator:
         # Final solve and yield solution
         final_path = self.solve(maze, entry, exit)
         yield (maze, final_path)
-
-    #
-    # Fonte (generators):
-    #   https://realpython.com/introduction-to-python-generators/
