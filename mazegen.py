@@ -78,6 +78,7 @@ class MazeGenerator:
         seed: Optional[int],
         perfect: bool,
         algorithm: str = "dfs",
+        density: float = 0.06,
     ) -> None:
         self.width = width
         self.height = height
@@ -87,6 +88,9 @@ class MazeGenerator:
         self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
         # Use a local RNG so that the same seed produces the same maze.
         self.rng = random.Random(seed)
+
+        # Density is used only when perfect=False (to create loops).
+        self.density = density
 
     # Checking if the coordinates are inside the maze.
     def _in_bounds(self, x: int, y: int) -> bool:
@@ -132,10 +136,10 @@ class MazeGenerator:
         return (maze.get(x, y) & bit_current) == 0
 
     #
-    # Fonte (bitmask):
+    # Source (bitmask):
     #   https://www.learncpp.com/cpp-tutorial/bitmasks/
     #
-    # Fonte (maze/grafo):
+    # Source (maze/graph):
     #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
     # ============================================================
 
@@ -212,7 +216,7 @@ class MazeGenerator:
             stack.append((nx, ny))
 
     #
-    # Fonte (DFS maze):
+    # Source (DFS maze):
     #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
     # ============================================================
 
@@ -265,16 +269,16 @@ class MazeGenerator:
             add_frontier(nx, ny)
 
     # ============================================================
-    # STEP 5 — CONSTRAINT: "42" pattern (OBRIGATÓRIO)
+    # STEP 5 — CONSTRAINT: "42" pattern (MANDATORY)
     #
-    # Fonte (grids / offsets):
+    # Source (grids / offsets):
     #   https://www.redblobgames.com/grids/intro/
     # ============================================================
 
     def _get_42_coords(self, maze: Maze) -> set[tuple[int, int]]:
         """Return coordinates of a centered '42' pattern (size-aware)."""
-        # Use multiple base patterns. This allows a smaller "42" in small
-        # mazes, because scale cannot go below 1 with integer cells.
+        # We use multiple patterns so the "42" can be smaller on small mazes.
+        # Scale cannot go below 1 with integer cells, so pattern choice matters.
 
         pat_small = [
             "#.#.###",
@@ -325,7 +329,7 @@ class MazeGenerator:
         # Scale only for very large mazes, otherwise it becomes too big.
         max_scale = min(avail_w // base_w, avail_h // base_h)
         scale = 1
-        if maze.width >= 80 and maze.height >= 55:
+        if maze.width >= 90 and maze.height >= 60:
             scale = min(2, max_scale)
 
         stamp_w = base_w * scale
@@ -363,9 +367,9 @@ class MazeGenerator:
             maze.set(x, y, 15)
 
     # ============================================================
-    # STEP 6 — CONSTRAINT: "no 3x3 open area" (OBRIGATÓRIO)
+    # STEP 6 — CONSTRAINT: "no 3x3 open area" (MANDATORY)
     #
-    # Fonte (flood fill / áreas):
+    # Source (flood fill / areas):
     #   https://www.geeksforgeeks.org/flood-fill-algorithm/
     # ============================================================
 
@@ -479,6 +483,63 @@ class MazeGenerator:
         # Nothing to fix
         return
 
+    # ============================================================
+    # PERFECT=False support (non-perfect maze with loops)
+    #
+    # Idea:
+    #   - Generate a perfect maze first (tree)
+    #   - Then open extra random walls to create loops
+    #   - Keep coherence and avoid the 42 blocked cells
+    # ============================================================
+
+    def _add_loops(
+        self,
+        maze: Maze,
+        blocked: set[tuple[int, int]],
+        density: float,
+    ) -> None:
+        """
+        Open extra walls randomly to create loops (non-perfect maze).
+
+        density is relative to the number of cells.
+        Example: 0.06 means about 6% of cells try to open one extra wall.
+        """
+        if density <= 0.0:
+            return
+
+        attempts = int(self.width * self.height * density)
+        if attempts < 1:
+            return
+
+        dirs = list(DIRS.keys())
+
+        for _ in range(attempts):
+            x = self.rng.randrange(self.width)
+            y = self.rng.randrange(self.height)
+
+            if (x, y) in blocked:
+                continue
+
+            d = self.rng.choice(dirs)
+            dx, dy, _bit_current, _bit_opp = DIRS[d]
+            nx = x + dx
+            ny = y + dy
+
+            if not self._in_bounds(nx, ny):
+                continue
+            if (nx, ny) in blocked:
+                continue
+
+            # Only open if currently closed
+            if self._can_move(maze, x, y, d):
+                continue
+
+            self._open_wall(maze, x, y, d)
+
+            # Keep the 3x3 rule safe: if forbidden, revert this opening.
+            if self._has_forbidden_3x3(maze):
+                self._close_wall(maze, x, y, d)
+
     # -----------------------
     # Required public API
     # -----------------------
@@ -509,6 +570,10 @@ class MazeGenerator:
         else:
             self._generate_dfs(maze, start=entry, blocked=blocked)
 
+        # If perfect is False, open extra walls to create loops.
+        if not self.perfect:
+            self._add_loops(maze, blocked=blocked, density=self.density)
+
         # STEP 5: stamp (store coords + force the 42 cells to 15)
         self._stamp_42(maze, blocked)
 
@@ -521,9 +586,9 @@ class MazeGenerator:
         return maze
 
     # ============================================================
-    # STEP 7 — SOLVER BFS (MANDATORY: caminho mais curto)
+    # STEP 7 — SOLVER BFS (MANDATORY: shortest path)
     #
-    # Fonte (BFS em grids):
+    # Source (BFS on grids):
     #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
     # ============================================================
 
@@ -578,9 +643,9 @@ class MazeGenerator:
         return path
 
     # ============================================================
-    # STEP 8 — SOLVER A* (BÓNUS: 2º solver)
+    # STEP 8 — SOLVER A* (BONUS: 2nd solver)
     #
-    # Fonte (A*):
+    # Source (A*):
     #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
     # ============================================================
 
@@ -649,9 +714,9 @@ class MazeGenerator:
         return path
 
     # ============================================================
-    # STEP 9 — ANIMATION (BÓNUS)
+    # STEP 9 — ANIMATION (BONUS)
     #
-    # Fonte (generators):
+    # Source (generators):
     #   https://realpython.com/introduction-to-python-generators/
     # ============================================================
 
@@ -676,7 +741,7 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation
+        # Step-by-step DFS generation (animation uses DFS for now)
         visited: set[tuple[int, int]] = set()
         stack: list[tuple[int, int]] = []
 
@@ -710,6 +775,11 @@ class MazeGenerator:
 
             visited.add((nx, ny))
             stack.append((nx, ny))
+
+        # If perfect is False, add loops (optional for animation)
+        if not self.perfect:
+            self._add_loops(maze, blocked=blocked, density=self.density)
+            yield (maze, [])
 
         # Apply constraints after generation
         self._stamp_42(maze, blocked)
