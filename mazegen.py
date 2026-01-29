@@ -137,9 +137,11 @@ class MazeGenerator:
     # Fonte (maze/grafo):
     #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
 
-    def _validate_params(self,
-                         entry: tuple[int, int],
-                         exit: tuple[int, int]) -> None:
+    def _validate_params(
+        self,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> None:
         """
         Validate entry and exit parameters.
         Raise ValueError with clear messages if invalid.
@@ -159,7 +161,12 @@ class MazeGenerator:
         if entry == exit:
             raise ValueError("Entry and exit must be different")
 
-    def _generate_dfs(self, maze: Maze, start: tuple[int, int]) -> None:
+    def _generate_dfs(
+        self,
+        maze: Maze,
+        start: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> None:
         """
         Generate a perfect maze using DFS (recursive backtracker)
         starting from start.
@@ -181,9 +188,14 @@ class MazeGenerator:
             for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
                 nx = x + dx
                 ny = y + dy
-                if self._in_bounds(nx, ny) and (nx, ny) not in visited:
-                    # Candidate neighbor: in bounds and not visited yet
-                    unvisited_neighbors.append((nx, ny, d))
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in visited:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                # Candidate neighbor: in bounds and not visited yet
+                unvisited_neighbors.append((nx, ny, d))
 
             # If none exist we pop (going back)
             if not unvisited_neighbors:
@@ -201,7 +213,12 @@ class MazeGenerator:
     # Fonte (DFS maze):
     #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
 
-    def _generate_prim(self, maze: Maze, start: tuple[int, int]) -> None:
+    def _generate_prim(
+        self,
+        maze: Maze,
+        start: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> None:
         """
         Generate a maze using Prim's algorithm (randomized)
         starting from start.
@@ -218,8 +235,13 @@ class MazeGenerator:
             """Add edges from (x,y) to all neighbors not yet in the tree."""
             for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
                 nx, ny = x + dx, y + dy
-                if self._in_bounds(nx, ny) and (nx, ny) not in in_tree:
-                    frontier.append((x, y, nx, ny, d))
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in in_tree:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                frontier.append((x, y, nx, ny, d))
 
         sx, sy = start
         in_tree.add((sx, sy))
@@ -240,14 +262,29 @@ class MazeGenerator:
             add_frontier(nx, ny)
 
 
-    def _stamp_42(self, maze: Maze) -> None:
-        """
-        Stamp the "42" into the maze by forcing some cells to be closed (15).
-        Also fixes neighbor walls so no neighbor has an open wall.
-        """
-        # Pattern is 11x7: "4" (5 cols) + 1 col gap + "2" (5 cols)
-        # '.' means "leave as is"; any other char means "force this cell to 15"
-        pattern = [
+    def _get_42_coords(self, maze: Maze) -> set[tuple[int, int]]:
+        """Return coordinates of a centered '42' pattern (size-aware)."""
+        # Use multiple base patterns. This allows a smaller "42" in small
+        # mazes, because scale cannot go below 1 with integer cells.
+
+        pat_small = [
+            "#.#.###",
+            "#.#...#",
+            "###.###",
+            "..#.#..",
+            "..#.###",
+        ]  # 7x5
+
+        pat_med = [
+            "#..#.####",
+            "#..#....#",
+            "####.####",
+            "...#.#...",
+            "...#.####",
+            ".......#.",
+        ]  # 8x6
+
+        pat_big = [
             "#...#.#####",
             "#...#.....#",
             "#...#.....#",
@@ -255,48 +292,66 @@ class MazeGenerator:
             "....#.#....",
             "....#.#....",
             "....#.#####",
-        ]
+        ]  # 11x7
 
-        pat_h = len(pattern)
-        pat_w = len(pattern[0])
+        # Pick the pattern based on maze size (visual balance).
+        if maze.width < 28 or maze.height < 20:
+            pattern = pat_small
+        elif maze.width < 45 or maze.height < 30:
+            pattern = pat_med
+        else:
+            pattern = pat_big
 
-        # If the maze is too small to fit the pattern, fail early
-        if maze.width < pat_w or maze.height < pat_h:
+        base_h = len(pattern)
+        base_w = len(pattern[0])
+
+        # Keep a margin so the maze still has room around the stamp.
+        margin = 2
+        avail_w = maze.width - (2 * margin)
+        avail_h = maze.height - (2 * margin)
+
+        if avail_w < base_w or avail_h < base_h:
             raise ValueError("Maze too small for 42 pattern")
 
-        # Center the pattern in the maze
-        ox = (maze.width - pat_w) // 2
-        oy = (maze.height - pat_h) // 2
+        # Scale only for very large mazes, otherwise it becomes too big.
+        max_scale = min(avail_w // base_w, avail_h // base_h)
+        scale = 1
+        if maze.width >= 80 and maze.height >= 55:
+            scale = min(2, max_scale)
 
-        # Save coords of the 42 pattern so Alexandre can color it safely
-        maze.stamp42.clear()
+        stamp_w = base_w * scale
+        stamp_h = base_h * scale
 
-        for py in range(pat_h):
+        # Center the chosen pattern in the maze.
+        ox = (maze.width - stamp_w) // 2
+        oy = (maze.height - stamp_h) // 2
+
+        coords: set[tuple[int, int]] = set()
+
+        for py in range(base_h):
             row = pattern[py]
-            for px in range(pat_w):
+            for px in range(base_w):
                 if row[px] == ".":
                     continue
+                x0 = ox + (px * scale)
+                y0 = oy + (py * scale)
+                for sy in range(scale):
+                    for sx in range(scale):
+                        coords.add((x0 + sx, y0 + sy))
 
-                x = ox + px
-                y = oy + py
+        return coords
 
-                # Save this cell as part of the 42
-                maze.stamp42.add((x, y))
+    def _stamp_42(self, maze: Maze, coords: set[tuple[int, int]]) -> None:
+        """
+        Stamp the "42" into the maze by forcing some cells to be closed (15).
+        """
+        # Save coords of the 42 pattern so Alexandre can color it safely
+        maze.stamp42.clear()
+        maze.stamp42.update(coords)
 
-                # Force this cell to be fully closed (all walls closed)
-                maze.set(x, y, 15)
-
-                # Fix neighbors so nobody has open walls into this closed cell
-                for d, (dx, dy, _bit_current,
-                        bit_neighbor_opposite) in DIRS.items():
-                    nx = x + dx
-                    ny = y + dy
-                    if not self._in_bounds(nx, ny):
-                        continue
-
-                    # Ensure the neighbor has its wall facing (x,y) CLOSED
-                    neighbor = maze.get(nx, ny)
-                    maze.set(nx, ny, neighbor | bit_neighbor_opposite)
+        # Force the 42 cells to be fully closed (all walls closed)
+        for x, y in coords:
+            maze.set(x, y, 15)
 
 
     def _close_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
@@ -421,14 +476,22 @@ class MazeGenerator:
             [[15 for _ in range(self.width)] for _ in range(self.height)],
         )
 
-        if self.algorithm in ("dfs", "recursive_backtracker"):
-            self._generate_dfs(maze, start=entry)
-        elif self.algorithm == "prim":
-            self._generate_prim(maze, start=entry)
-        else:
-            self._generate_dfs(maze, start=entry)
+        # Define the 42 coords before generation so we don't break paths later.
+        blocked = self._get_42_coords(maze)
 
-        self._stamp_42(maze)
+        if entry in blocked:
+            raise ValueError("Entry is inside the 42 pattern")
+        if exit in blocked:
+            raise ValueError("Exit is inside the 42 pattern")
+
+        if self.algorithm in ("dfs", "recursive_backtracker"):
+            self._generate_dfs(maze, start=entry, blocked=blocked)
+        elif self.algorithm == "prim":
+            self._generate_prim(maze, start=entry, blocked=blocked)
+        else:
+            self._generate_dfs(maze, start=entry, blocked=blocked)
+
+        self._stamp_42(maze, blocked)
 
         for _ in range(self.width * self.height):
             if not self._has_forbidden_3x3(maze):
@@ -438,10 +501,12 @@ class MazeGenerator:
         return maze
 
 
-    def solve(self,
-              maze: Maze,
-              entry: tuple[int, int],
-              exit: tuple[int, int]) -> list[str]:
+    def solve(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> list[str]:
         """Return shortest path as list of moves like ['N','E',...]."""
         q: deque[tuple[int, int]] = deque()
         visited: set[tuple[int, int]] = set()
@@ -487,10 +552,12 @@ class MazeGenerator:
         return path
 
 
-    def solve_astar(self,
-                    maze: Maze,
-                    entry: tuple[int, int],
-                    exit: tuple[int, int]) -> list[str]:
+    def solve_astar(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> list[str]:
         """
         Return a path using A* (Manhattan heuristic) as list
         of moves like ['N','E',...].
@@ -550,9 +617,11 @@ class MazeGenerator:
         return path
 
 
-    def iter_steps(self,
-                   entry: tuple[int, int],
-                   exit: tuple[int, int]) -> Iterator[tuple[Maze, list[str]]]:
+    def iter_steps(
+        self,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> Iterator[tuple[Maze, list[str]]]:
         """Yield intermediate (maze, path_so_far) states for animation."""
         self._validate_params(entry, exit)
 
@@ -561,6 +630,13 @@ class MazeGenerator:
             self.height,
             [[15 for _ in range(self.width)] for _ in range(self.height)],
         )
+
+        blocked = self._get_42_coords(maze)
+
+        if entry in blocked:
+            raise ValueError("Entry is inside the 42 pattern")
+        if exit in blocked:
+            raise ValueError("Exit is inside the 42 pattern")
 
         # Step-by-step DFS generation
         visited: set[tuple[int, int]] = set()
@@ -576,8 +652,13 @@ class MazeGenerator:
             for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
                 nx = x + dx
                 ny = y + dy
-                if self._in_bounds(nx, ny) and (nx, ny) not in visited:
-                    unvisited_neighbors.append((nx, ny, d))
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in visited:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                unvisited_neighbors.append((nx, ny, d))
 
             if not unvisited_neighbors:
                 stack.pop()
@@ -593,7 +674,7 @@ class MazeGenerator:
             stack.append((nx, ny))
 
         # Apply constraints after generation
-        self._stamp_42(maze)
+        self._stamp_42(maze, blocked)
 
         for _ in range(self.width * self.height):
             if not self._has_forbidden_3x3(maze):
