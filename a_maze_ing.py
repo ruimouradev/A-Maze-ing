@@ -72,6 +72,7 @@ def main(argv: list[str]) -> int:
         seed=cfg.seed,
         perfect=cfg.perfect,
         algorithm=cfg.algorithm,
+        density=cfg.density,
     )
 
     # Generate maze structure
