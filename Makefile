@@ -26,9 +26,9 @@ clean:
 	rm -rf __pycache__ .mypy_cache .pytest_cache build dist *.egg-info
 
 lint:
-	flake8 . --exclude mazegen.py
+	flake8 .
 	mypy a_maze_ing.py renderer_ascii.py config.py serializer.py --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	flake8 . --exclude mazegen.py
+	flake8 .
 	mypy a_maze_ing.py renderer_ascii.py config.py serializer.py --strict

@@ -252,7 +252,7 @@ class AsciiRenderer:
                 # Clear terminal before regeneration
                 print("\033[H\033[J", end="")
                 print("Regenerating maze...")
-                
+
                 # Use the generator engine to create a NEW maze
                 if self.animate:
                     # Animate the generation step-by-step
