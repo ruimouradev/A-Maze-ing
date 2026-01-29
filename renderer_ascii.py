@@ -81,6 +81,7 @@ class AsciiRenderer:
 
         # Convert path directions to coordinates
         path_coords = set()
+        path_connectors: set[tuple[int, int, str]] = set()
         stamp_coords: set[tuple[int, int]] = getattr(
             maze, "stamp42", set()
         )
@@ -90,13 +91,18 @@ class AsciiRenderer:
             x, y = cfg.entry
             path_coords.add((x, y))  # Include entry in path
             for direction in path:
+                gx, gy = 2 * x + 1, 2 * y + 1
                 if direction == 'N':
+                    path_connectors.add((gy - 1, gx, "V"))
                     y -= 1
                 elif direction == 'S':
+                    path_connectors.add((gy + 1, gx, "V"))
                     y += 1
                 elif direction == 'E':
+                    path_connectors.add((gy, gx + 1, "H"))
                     x += 1
                 elif direction == 'W':
+                    path_connectors.add((gy, gx - 1, "H"))
                     x -= 1
                 else:
                     # Skip invalid directions
@@ -105,60 +111,126 @@ class AsciiRenderer:
             # Ensure exit is in path_coords
             path_coords.add(cfg.exit)
 
-        # loops through all lines of the maze, one at a time
-        for y, row in enumerate(maze.cells):
-            line_top = ""
-            line_mid = ""
-            line_bot = ""
+        wall_chars = {
+            "─",
+            "│",
+            "┌",
+            "┐",
+            "└",
+            "┘",
+            "├",
+            "┤",
+            "┬",
+            "┴",
+            "┼",
+        }
 
-            # loop that processes 1 line (prints 3 x 3 blocks)
+        def _junction_char(
+            up: bool, down: bool, left: bool, right: bool
+        ) -> str:
+            key = (up, down, left, right)
+            mapping = {
+                (False, False, False, False): " ",
+                (True, True, False, False): "│",
+                (False, False, True, True): "─",
+                (False, True, False, True): "┌",
+                (False, True, True, False): "┐",
+                (True, False, False, True): "└",
+                (True, False, True, False): "┘",
+                (True, True, False, True): "├",
+                (True, True, True, False): "┤",
+                (False, True, True, True): "┬",
+                (True, False, True, True): "┴",
+                (True, True, True, True): "┼",
+            }
+            return mapping.get(key, " ")
+
+        rows = len(maze.cells)
+        cols = len(maze.cells[0]) if rows > 0 else 0
+        grid_h = rows * 2 + 1
+        grid_w = cols * 2 + 1
+        grid: list[list[str]] = [
+            [" " for _ in range(grid_w)] for _ in range(grid_h)
+        ]
+
+        for y, row in enumerate(maze.cells):
             for x, cell_value in enumerate(row):
-                # 1. Determine Center Color (Entry vs Exit vs Stamp vs Path)
+                # 1. Determine cell type and center character
                 if (x, y) == cfg.entry:
                     center_char = f"{ENTRY_COLOR}{BLOCK}{RESET}"
                 elif (x, y) == cfg.exit:
                     center_char = f"{EXIT_COLOR}{BLOCK}{RESET}"
                 elif has_stamp and (x, y) in stamp_coords:
-                    # Highlight the 42 stamp cells (if present)
                     center_char = f"{STAMP_COLOR}{BLOCK}{RESET}"
                 elif (x, y) in path_coords:
-                    # Show path cell in bright cyan
                     center_char = f"{PATH_COLOR}{BLOCK}{RESET}"
                 else:
-                    center_char = " "  # Space for floor
+                    center_char = " "
+
+                grid[2 * y + 1][2 * x + 1] = center_char
 
                 # 2. Build the walls using bitmasking
                 # (cell_value is 0-15: N=1, E=2, S=4, W=8)
-                # Check bit 0 for north wall (1=exists, 0=no wall)
-                n_wall = (
-                    f"{WALL_COLOR}{BLOCK*3}{RESET}"
-                    if cell_value & 1 else "   "
-                )
-                # Check bit 1 for east wall (1=exists, 0=no wall)
-                e_wall = (
-                    f"{WALL_COLOR}{BLOCK}{RESET}"
-                    if cell_value & 2 else " "
-                )
-                # Check bit 2 for south wall (1=exists, 0=no wall)
-                s_wall = (
-                    f"{WALL_COLOR}{BLOCK*3}{RESET}"
-                    if cell_value & 4 else "   "
-                )
-                # Check bit 3 for west wall (1=exists, 0=no wall)
-                w_wall = (
-                    f"{WALL_COLOR}{BLOCK}{RESET}"
-                    if cell_value & 8 else " "
-                )
-                corner = f"{WALL_COLOR}{BLOCK}{RESET}"
+                n_wall_exists = bool(cell_value & 1)
+                e_wall_exists = bool(cell_value & 2)
+                s_wall_exists = bool(cell_value & 4)
+                w_wall_exists = bool(cell_value & 8)
 
-                # 3. Construct 3x3 Block
-                line_top += f"{corner}{n_wall}{corner}"
-                line_mid += f"{w_wall} {center_char} {e_wall}"
-                line_bot += f"{corner}{s_wall}{corner}"
+                if n_wall_exists:
+                    grid[2 * y][2 * x + 1] = "─"
+                if s_wall_exists:
+                    grid[2 * y + 2][2 * x + 1] = "─"
+                if w_wall_exists:
+                    grid[2 * y + 1][2 * x] = "│"
+                if e_wall_exists:
+                    grid[2 * y + 1][2 * x + 2] = "│"
 
-            print(line_top)
-            print(line_mid)
-            print(line_bot)
+        # 3. Add path connectors so color is continuous between cells
+        for gy, gx, orient in path_connectors:
+            if 0 <= gy < grid_h and 0 <= gx < grid_w:
+                if grid[gy][gx] == " ":
+                    grid[gy][gx] = orient
+
+        path_center_grid = {
+            (2 * y + 1, 2 * x + 1) for (x, y) in path_coords
+        }
+
+        # 4. Resolve junctions for continuous lines
+        for gy in range(0, grid_h, 2):
+            for gx in range(0, grid_w, 2):
+                up = gy > 0 and grid[gy - 1][gx] == "│"
+                down = gy < grid_h - 1 and grid[gy + 1][gx] == "│"
+                left = gx > 0 and grid[gy][gx - 1] == "─"
+                right = gx < grid_w - 1 and grid[gy][gx + 1] == "─"
+                grid[gy][gx] = _junction_char(up, down, left, right)
+
+        # 5. Print the grid with colored walls
+        right_edge_chars = {"─", "┌", "└", "├", "┬", "┴", "┼"}
+        for gy, grid_row in enumerate(grid):
+            line = ""
+            for gx, ch in enumerate(grid_row):
+                if ch in wall_chars:
+                    line += f"{WALL_COLOR}{ch}{RESET}"
+                elif ch == "H":
+                    line += f"{PATH_COLOR}{BLOCK}{RESET}"
+                elif ch == "V":
+                    line += f"{PATH_COLOR}{BLOCK}{RESET}"
+                else:
+                    line += ch
+                if gx == grid_w - 1:
+                    continue
+                next_ch = grid_row[gx + 1]
+                if ch in right_edge_chars:
+                    line += f"{WALL_COLOR}─{RESET}"
+                elif ch == "H":
+                    line += f"{PATH_COLOR}{BLOCK}{RESET}"
+                elif (gy, gx) in path_center_grid and (
+                    next_ch == "H" or (gy, gx + 1) in path_center_grid
+                ):
+                    line += f"{PATH_COLOR}{BLOCK}{RESET}"
+                else:
+                    line += " "
+            print(line)
 
     def _animate_maze(
         self, gen: MazeGenerator, cfg: Config
@@ -181,7 +253,7 @@ class AsciiRenderer:
         # Iterate through maze generation steps
         for step_maze, step_path in gen.iter_steps(cfg.entry, cfg.exit):
             # Clear terminal and draw current generation state
-            print("\033[H\033[J", end="")
+            print("\033[2J\033[H", end="", flush=True)
             self._draw_maze(step_maze, cfg, step_path)
 
             # Store the final state
@@ -222,8 +294,9 @@ class AsciiRenderer:
         current_path = path  # Solution path to display
 
         while True:
-            # 1. Clear terminal (s\033 = esc; [H = Home; \033[J = Erase)
-            print("\033[H\033[J", end="")
+            # 1. Clear terminal
+            # (\033 = esc; [2J = Clear entire screen; [H = Home)
+            print("\033[2J\033[H", end="", flush=True)
 
             # 2. Draw the maze: render walls, entry, and exit
             self._draw_maze(current_maze, cfg, current_path)
@@ -249,9 +322,9 @@ class AsciiRenderer:
                 # Toggle animation on/off
                 self.animate = not self.animate
             elif cmd == 'r':
-                # Clear terminal before regeneration
-                print("\033[H\033[J", end="")
-                print("Regenerating maze...")
+                # Clear terminal and move cursor to top
+                print("\033[2J\033[H", end="", flush=True)
+                print("Regenerating maze...", flush=True)
 
                 # Use the generator engine to create a NEW maze
                 if self.animate:
