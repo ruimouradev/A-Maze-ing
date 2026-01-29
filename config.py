@@ -107,6 +107,9 @@ def load_config(path: str) -> Config:
         line = raw.strip()  # after split, removes leading/trailing whitespace
         if not line or line.startswith("#"):
             continue  # if empty or "#" skip to next line
+        # Strip inline comments (# not in quotes)
+        if "#" in line:
+            line = line.split("#", 1)[0].strip()
         if "=" not in line:
             raise ValueError(f"Invalid line (expected KEY=VALUE): {raw}")
         key, value = line.split("=", 1)  # split the string by the 1st "="
