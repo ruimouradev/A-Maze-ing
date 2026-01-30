@@ -1,37 +1,33 @@
-# ============================================================
-# File: mazegen.py
-#
-# OWNER:
-#   Rui (Person A)
-#
-# ROLE:
-#   Core maze engine (data model, generation, solving).
-#
-# RUI MUST (obrigatório):
-#   1) Implement Maze data structure (grid + walls)
-#   2) Implement wall consistency helpers (open_wall updates both cells)
-#   3) Implement DFS maze generation (perfect maze baseline)
-#   4) Enforce constraints (borders, "42" pattern, no 3x3 open areas)
-#   5) Implement BFS shortest-path solver (returns ['N','E','S','W'])
-#
-# BONUS(stubs included):
-#   6) Add 2nd algorithm (Prim) selectable via config: ALGORITHM=prim
-#   7) Add A* solver (2nd resolution algorithm)  <-- to match your "bonus full"
-#   8) Add iter_steps() generator for animation support
-#
-# MUST NOT:
-#   - Print to terminal
-#   - Read/write files
-#   - Handle user input
-# ============================================================
+"""A-Maze-ing — Core maze engine (group project)
 
-# Import type hints
+This module contains the reusable maze engine:
+- Maze data model (grid + walls bitmask)
+- Generation algorithms (DFS baseline, Prim bonus)
+- Constraint enforcement ("42" stamp, borders, no 3x3 open areas)
+- Solvers (BFS shortest path, A* bonus)
+
+Design rules:
+- No printing
+- No file I/O
+- No user interaction
+
+The goal is to keep this file self-contained and side-effect free so it can be
+imported and reused in future projects.
+"""
+
+# Enable forward type annotations (Python typing feature)
 from __future__ import annotations
+
+# Typing helpers: Optional values and Iterator return types
 from typing import Optional, Iterator
+
+# Efficient FIFO queue used by BFS
 from collections import deque
+
+# Priority queue used by A* (heap-based)
 import heapq
 
-# Importing library for generating random mazes with the same seed
+# Deterministic random generator (seed support)
 import random
 
 # Wall bitmask: each bit set to 1 means the corresponding wall is CLOSED.
@@ -57,6 +53,10 @@ class Maze:
         # cells[y][x] will have values between 0 and 15 (wall bitmask)
         self.cells = cells
 
+        # True if the maze is too small to place the mandatory "42" stamp.
+        # The caller can use this flag to print a warning.
+        self.omitted_42: bool = False
+
         # This will store the coordinates of the 42 pattern.
         # This is better than assuming "cell == 15" means it belongs to the 42.
         self.stamp42: set[tuple[int, int]] = set()
@@ -71,6 +71,7 @@ class Maze:
 
 
 class MazeGenerator:
+    """Maze generator engine (generation + constraints + solvers)."""
     def __init__(
         self,
         width: int,
@@ -555,7 +556,12 @@ class MazeGenerator:
         )
 
         # Define the 42 coords before generation so we don't break paths later.
-        blocked = self._get_42_coords(maze)
+        maze.omitted_42 = False
+        try:
+            blocked = self._get_42_coords(maze)
+        except ValueError:
+            blocked = set()
+            maze.omitted_42 = True
 
         if entry in blocked:
             raise ValueError("Entry is inside the 42 pattern")
@@ -921,84 +927,3 @@ class MazeGenerator:
         return self.solve_bfs_steps(
             maze, entry, exit, yield_every=yield_every
         )
-
-    # ============================================================
-    # STEP 9 — ANIMATION (BONUS)
-    #
-    # Source (generators):
-    #   https://realpython.com/introduction-to-python-generators/
-    # ============================================================
-
-    def iter_steps(
-        self,
-        entry: tuple[int, int],
-        exit: tuple[int, int],
-    ) -> Iterator[tuple[Maze, list[str]]]:
-        """Yield intermediate (maze, path_so_far) states for animation."""
-        self._validate_params(entry, exit)
-
-        maze = Maze(
-            self.width,
-            self.height,
-            [[15 for _ in range(self.width)] for _ in range(self.height)],
-        )
-
-        blocked = self._get_42_coords(maze)
-
-        if entry in blocked:
-            raise ValueError("Entry is inside the 42 pattern")
-        if exit in blocked:
-            raise ValueError("Exit is inside the 42 pattern")
-
-        # Step-by-step DFS generation (animation uses DFS for now)
-        visited: set[tuple[int, int]] = set()
-        stack: list[tuple[int, int]] = []
-
-        visited.add(entry)
-        stack.append(entry)
-
-        while stack:
-            x, y = stack[-1]
-
-            unvisited_neighbors: list[tuple[int, int, str]] = []
-            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                nx = x + dx
-                ny = y + dy
-                if not self._in_bounds(nx, ny):
-                    continue
-                if (nx, ny) in visited:
-                    continue
-                if (nx, ny) in blocked:
-                    continue
-                unvisited_neighbors.append((nx, ny, d))
-
-            if not unvisited_neighbors:
-                stack.pop()
-                continue
-
-            nx, ny, d = self.rng.choice(unvisited_neighbors)
-            self._open_wall(maze, x, y, d)
-
-            # Yield after carving a passage so renderer can animate
-            yield (maze, [])
-
-            visited.add((nx, ny))
-            stack.append((nx, ny))
-
-        # If perfect is False, add loops (optional for animation)
-        if not self.perfect:
-            self._add_loops(maze, blocked=blocked, density=self.density)
-            yield (maze, [])
-
-        # Apply constraints after generation
-        self._stamp_42(maze, blocked)
-
-        # STEP 6: fix 3x3 areas until it's clean (safe limit)
-        for _ in range(self.width * self.height):
-            if not self._has_forbidden_3x3(maze):
-                break
-            self._fix_forbidden_3x3(maze)
-
-        # Final solve and yield solution
-        final_path = self.solve(maze, entry, exit)
-        yield (maze, final_path)
