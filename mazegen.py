@@ -26,7 +26,6 @@
 
 # Import type hints
 from __future__ import annotations
-
 from typing import Optional, Iterator
 from collections import deque
 import heapq
@@ -600,9 +599,11 @@ class MazeGenerator:
                 prev[nxt] = ((x, y), d)
                 q.append(nxt)
 
+        # If exit not reached, no path
         if exit not in visited:
             return []
 
+        # Reconstruct path exit -> entry
         path: list[str] = []
         cur = exit
         while cur != entry:
@@ -628,6 +629,7 @@ class MazeGenerator:
         def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
+        # heap item: (fscore, gscore, node)
         open_heap: list[tuple[int, int, tuple[int, int]]] = []
         gscore: dict[tuple[int, int], int] = {entry: 0}
         prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
@@ -663,9 +665,11 @@ class MazeGenerator:
                 fscore = tentative_g + manhattan(nxt, exit)
                 heapq.heappush(open_heap, (fscore, tentative_g, nxt))
 
+        # If no path found
         if entry != exit and exit not in prev:
             return []
 
+        # Reconstruct path
         path: list[str] = []
         cur = exit
         while cur != entry:
@@ -695,7 +699,6 @@ class MazeGenerator:
             return []
         if exit not in prev:
             return []
-
         path: list[str] = []
         cur = exit
         while cur != entry:
@@ -765,6 +768,8 @@ class MazeGenerator:
                 yield (cur, set(visited), set(q), [])
 
         final_path = self._reconstruct_path(prev, entry, exit)
+
+        # Final frame (path is available now)
         yield (exit, set(visited), set(q), final_path)
 
     def solve_astar_steps(
@@ -846,7 +851,40 @@ class MazeGenerator:
                 yield (cur, set(closed), set(open_set), [])
 
         final_path = self._reconstruct_path(prev, entry, exit)
+
+        # Final frame
         yield (exit, set(closed), set(open_set), final_path)
+
+    def solve_steps(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+        solver: str = "bfs",
+        yield_every: int = 1,
+    ) -> Iterator[
+        tuple[
+            tuple[int, int],
+            set[tuple[int, int]],
+            set[tuple[int, int]],
+            list[str],
+        ]
+    ]:
+        """
+        Small dispatcher so the renderer can animate the chosen solver.
+
+        solver:
+          - 'bfs'  (mandatory)
+          - 'astar' (bonus)
+        """
+        s = solver.lower().strip()
+        if s in ("astar", "a*"):
+            return self.solve_astar_steps(
+                maze, entry, exit, yield_every=yield_every
+            )
+        return self.solve_bfs_steps(
+            maze, entry, exit, yield_every=yield_every
+        )
 
 
     def iter_steps(
@@ -870,8 +908,7 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation (still available)
-        # WE NEES TO CLEAN IF WE DON´T USE!!
+        # Step-by-step DFS generation (animation uses DFS for now)
         visited: set[tuple[int, int]] = set()
         stack: list[tuple[int, int]] = []
 
@@ -906,10 +943,12 @@ class MazeGenerator:
             visited.add((nx, ny))
             stack.append((nx, ny))
 
+        # If perfect is False, add loops (optional for animation)
         if not self.perfect:
             self._add_loops(maze, blocked=blocked, density=self.density)
             yield (maze, [])
 
+        # Apply constraints after generation
         self._stamp_42(maze, blocked)
 
         for _ in range(self.width * self.height):
@@ -917,5 +956,6 @@ class MazeGenerator:
                 break
             self._fix_forbidden_3x3(maze)
 
+        # Final solve and yield solution
         final_path = self.solve(maze, entry, exit)
         yield (maze, final_path)
