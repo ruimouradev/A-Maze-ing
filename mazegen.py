@@ -26,6 +26,7 @@
 
 # Import type hints
 from __future__ import annotations
+
 from typing import Optional, Iterator
 from collections import deque
 import heapq
@@ -269,7 +270,7 @@ class MazeGenerator:
     def _get_42_coords(self, maze: Maze) -> set[tuple[int, int]]:
         """Return coordinates of a centered '42' pattern (size-aware)."""
         # We use multiple patterns so the "42" can be smaller on small mazes.
-        # Scale cannot go below 1 with integer cells, so pattern choice matters.
+        # Scale can't go below 1 with integer cells, so pattern choice matters.
 
         pat_small = [
             "#.#.###",
@@ -599,11 +600,9 @@ class MazeGenerator:
                 prev[nxt] = ((x, y), d)
                 q.append(nxt)
 
-        # If exit not reached, no path
         if exit not in visited:
             return []
 
-        # Reconstruct path exit -> entry
         path: list[str] = []
         cur = exit
         while cur != entry:
@@ -629,7 +628,6 @@ class MazeGenerator:
         def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-        # heap item: (fscore, gscore, node)
         open_heap: list[tuple[int, int, tuple[int, int]]] = []
         gscore: dict[tuple[int, int], int] = {entry: 0}
         prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
@@ -665,11 +663,9 @@ class MazeGenerator:
                 fscore = tentative_g + manhattan(nxt, exit)
                 heapq.heappush(open_heap, (fscore, tentative_g, nxt))
 
-        # If no path found
         if entry != exit and exit not in prev:
             return []
 
-        # Reconstruct path
         path: list[str] = []
         cur = exit
         while cur != entry:
@@ -678,6 +674,179 @@ class MazeGenerator:
             cur = (px, py)
         path.reverse()
         return path
+
+    # Solver step-by-step animation support (BFS / A*)
+    #
+    # Frame format:
+    #   (current, visited, frontier, path_so_far)
+    #
+    # Notes:
+    #   - path_so_far is [] until the goal is reached
+    #   - final frame yields the final_path
+
+    def _reconstruct_path(
+        self,
+        prev: dict[tuple[int, int], tuple[tuple[int, int], str]],
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> list[str]:
+        """Reconstruct path from prev dict, from exit back to entry."""
+        if entry == exit:
+            return []
+        if exit not in prev:
+            return []
+
+        path: list[str] = []
+        cur = exit
+        while cur != entry:
+            (px, py), d = prev[cur]
+            path.append(d)
+            cur = (px, py)
+        path.reverse()
+        return path
+
+    def solve_bfs_steps(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+        yield_every: int = 1,
+    ) -> Iterator[
+        tuple[
+            tuple[int, int],
+            set[tuple[int, int]],
+            set[tuple[int, int]],
+            list[str],
+        ]
+    ]:
+        """
+        BFS solver that yields intermediate states for animation.
+
+        yield_every controls how often we yield frames:
+          - 1 yields every expansion (smooth but slower)
+          - 5/10 yields fewer frames (faster)
+        """
+        q: deque[tuple[int, int]] = deque()
+        visited: set[tuple[int, int]] = set()
+        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
+
+        q.append(entry)
+        visited.add(entry)
+
+        steps = 0
+
+        # Initial frame
+        yield (entry, set(visited), set(q), [])
+
+        while q:
+            cur = q.popleft()
+            cx, cy = cur
+
+            if cur == exit:
+                break
+
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                if not self._can_move(maze, cx, cy, d):
+                    continue
+
+                nx = cx + dx
+                ny = cy + dy
+                nxt = (nx, ny)
+
+                if nxt in visited:
+                    continue
+
+                visited.add(nxt)
+                prev[nxt] = (cur, d)
+                q.append(nxt)
+
+            steps += 1
+            if yield_every > 0 and (steps % yield_every) == 0:
+                yield (cur, set(visited), set(q), [])
+
+        final_path = self._reconstruct_path(prev, entry, exit)
+        yield (exit, set(visited), set(q), final_path)
+
+    def solve_astar_steps(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+        yield_every: int = 1,
+    ) -> Iterator[
+        tuple[
+            tuple[int, int],
+            set[tuple[int, int]],
+            set[tuple[int, int]],
+            list[str],
+        ]
+    ]:
+        """
+        A* solver that yields intermediate states for animation.
+
+        The frontier set is the current open-set (nodes in the heap).
+        """
+
+        def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+        open_heap: list[tuple[int, int, tuple[int, int]]] = []
+        open_set: set[tuple[int, int]] = set()
+        closed: set[tuple[int, int]] = set()
+
+        gscore: dict[tuple[int, int], int] = {entry: 0}
+        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
+
+        heapq.heappush(open_heap, (manhattan(entry, exit), 0, entry))
+        open_set.add(entry)
+
+        steps = 0
+
+        # Initial frame
+        yield (entry, set(closed), set(open_set), [])
+
+        while open_heap:
+            _f, g, cur = heapq.heappop(open_heap)
+
+            if cur in closed:
+                continue
+
+            open_set.discard(cur)
+            closed.add(cur)
+
+            if cur == exit:
+                break
+
+            cx, cy = cur
+
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                if not self._can_move(maze, cx, cy, d):
+                    continue
+
+                nx = cx + dx
+                ny = cy + dy
+                nxt = (nx, ny)
+
+                if nxt in closed:
+                    continue
+
+                tentative_g = g + 1
+                if nxt in gscore and tentative_g >= gscore[nxt]:
+                    continue
+
+                gscore[nxt] = tentative_g
+                prev[nxt] = (cur, d)
+
+                fscore = tentative_g + manhattan(nxt, exit)
+                heapq.heappush(open_heap, (fscore, tentative_g, nxt))
+                open_set.add(nxt)
+
+            steps += 1
+            if yield_every > 0 and (steps % yield_every) == 0:
+                yield (cur, set(closed), set(open_set), [])
+
+        final_path = self._reconstruct_path(prev, entry, exit)
+        yield (exit, set(closed), set(open_set), final_path)
 
 
     def iter_steps(
@@ -701,7 +870,7 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation (animation uses DFS for now)
+        # Step-by-step DFS generation (still available if you want)
         visited: set[tuple[int, int]] = set()
         stack: list[tuple[int, int]] = []
 
@@ -736,12 +905,10 @@ class MazeGenerator:
             visited.add((nx, ny))
             stack.append((nx, ny))
 
-        # If perfect is False, add loops (optional for animation)
         if not self.perfect:
             self._add_loops(maze, blocked=blocked, density=self.density)
             yield (maze, [])
 
-        # Apply constraints after generation
         self._stamp_42(maze, blocked)
 
         for _ in range(self.width * self.height):
@@ -749,6 +916,5 @@ class MazeGenerator:
                 break
             self._fix_forbidden_3x3(maze)
 
-        # Final solve and yield solution
         final_path = self.solve(maze, entry, exit)
         yield (maze, final_path)
