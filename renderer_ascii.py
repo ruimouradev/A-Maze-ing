@@ -56,7 +56,13 @@ class AsciiRenderer:
         self.animation_speed = 0.01  # 10ms per frame
 
     def _draw_maze(
-        self, maze: Maze, cfg: Config, path: list[str]
+        self,
+        maze: Maze,
+        cfg: Config,
+        path: list[str],
+        visited: set[tuple[int, int]] | None = None,
+        frontier: set[tuple[int, int]] | None = None,
+        current: tuple[int, int] | None = None,
     ) -> None:
         """Render maze grid with walls, entry, exit, and solution path.
 
@@ -161,6 +167,12 @@ class AsciiRenderer:
                     center_char = f"{EXIT_COLOR}{BLOCK}{RESET}"
                 elif has_stamp and (x, y) in stamp_coords:
                     center_char = f"{STAMP_COLOR}{BLOCK}{RESET}"
+                elif current and (x, y) == current:
+                    center_char = "\033[95m█\033[0m"   # roxo = cursor
+                elif frontier and (x, y) in frontier:
+                    center_char = "\033[94m█\033[0m"   # azul = frontier
+                elif visited and (x, y) in visited:
+                    center_char = "\033[90m█\033[0m"   # cinza = visited
                 elif (x, y) in path_coords:
                     center_char = f"{PATH_COLOR}{BLOCK}{RESET}"
                 else:
@@ -260,14 +272,24 @@ class AsciiRenderer:
                 yield_every=yield_every,
             )
 
-        for _cur, _visited, _frontier, step_path in steps_it:
-            # Clear terminal and redraw. We only draw the path when available.
-            print("\033[2J\033[H", end="", flush=True)
-            self._draw_maze(maze, cfg, step_path)
+        # Clear once, then only move cursor to home to reduce flicker.
+        print("\033[2J\033[H\033[?25l", end="", flush=True)
+
+        for cur, visited, frontier, step_path in steps_it:
+            print("\033[H", end="", flush=True)
+            self._draw_maze(
+                maze,
+                cfg,
+                step_path,
+                visited=visited,
+                frontier=frontier,
+                current=cur,
+            )
 
             final_path = step_path
             time.sleep(self.animation_speed)
 
+        print("\033[?25h", end="", flush=True)
         return final_path
 
     def run(
