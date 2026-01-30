@@ -354,8 +354,9 @@ class AsciiRenderer:
                 # Always regenerate instantly (cleaner visuals).
                 current_maze = gen.generate(cfg.entry, cfg.exit)
 
-                if self.animate:
-                    # Animate the solver only (choose one).
+                if self.animate and self.show_path:
+                    # Animate solver only if both animation and path
+                    # are enabled
                     # Option A: always BFS
                     current_path = self._animate_solver(
                         gen,

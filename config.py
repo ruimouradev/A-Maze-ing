@@ -142,6 +142,16 @@ def load_config(path: str) -> Config:
         if width <= 0 or height <= 0:
             raise ValueError("WIDTH and HEIGHT must be positive integers.")
 
+        # Check if maze is too small for 42 stamp
+        if width < 11 or height < 9:
+            print("Error: Maze too small for 42 pattern")
+            response = input(
+                "Do you want to continue without 42 pattern? (y/n): "
+            )
+            if response.lower() != 'y':
+                import sys
+                sys.exit(0)
+
         # convert entry/exit coordinates from str to int
         entry = _parse_coord(data["ENTRY"])
         exit_coord = _parse_coord(data["EXIT"])
