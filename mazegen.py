@@ -912,7 +912,8 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation (still available if you want)
+        # Step-by-step DFS generation (still available)
+        # WE NEES TO CLEAN IF WE DON´T USE!!
         visited: set[tuple[int, int]] = set()
         stack: list[tuple[int, int]] = []
 
