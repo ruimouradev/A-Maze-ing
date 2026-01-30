@@ -231,41 +231,44 @@ class AsciiRenderer:
                     line += " "
             print(line)
 
-    def _animate_maze(
-        self, gen: MazeGenerator, cfg: Config
-    ) -> tuple[Maze, list[str]]:
-        """Animate maze generation step-by-step using iter_steps().
+    def _animate_solver(
+        self,
+        gen: MazeGenerator,
+        cfg: Config,
+        maze: Maze,
+        solver: str = "bfs",
+        yield_every: int = 1,
+    ) -> list[str]:
+        """Animate solver (BFS / A*) step-by-step.
 
-        Yields intermediate maze states from the generator, rendering each
-        frame with a slight delay for visual effect.
-
-        Args:
-            gen: Maze generator engine with iter_steps() method.
-            cfg: Configuration with entry/exit coordinates.
-
-        Returns:
-            Tuple of (final_maze, solution_path).
+        We keep maze generation instant, and animate only the solver search.
         """
-        final_maze: Maze | None = None
         final_path: list[str] = []
 
-        # Iterate through maze generation steps
-        for step_maze, step_path in gen.iter_steps(cfg.entry, cfg.exit):
-            # Clear terminal and draw current generation state
+        if solver == "astar":
+            steps_it = gen.solve_astar_steps(
+                maze,
+                cfg.entry,
+                cfg.exit,
+                yield_every=yield_every,
+            )
+        else:
+            steps_it = gen.solve_bfs_steps(
+                maze,
+                cfg.entry,
+                cfg.exit,
+                yield_every=yield_every,
+            )
+
+        for _cur, _visited, _frontier, step_path in steps_it:
+            # Clear terminal and redraw. We only draw the path when available.
             print("\033[2J\033[H", end="", flush=True)
-            self._draw_maze(step_maze, cfg, step_path)
+            self._draw_maze(maze, cfg, step_path)
 
-            # Store the final state
-            final_maze = step_maze
             final_path = step_path
-
-            # Small delay so animation is visible (not instant)
             time.sleep(self.animation_speed)
 
-        # iter_steps() always yields at least once, so final_maze won't be None
-        # raises an AssertionError and stops execution
-        assert final_maze is not None, "No maze state generated"
-        return final_maze, final_path
+        return final_path
 
     def run(
         self,
@@ -280,7 +283,7 @@ class AsciiRenderer:
             (r)egenerate - Create and solve new maze (instant or animated)
             (p)ath - Toggle solution path display
             (c)olor - Cycle wall color
-            (a)nimation - Toggle maze generation animation
+            (a)nimation - Toggle solver animation
             (q)uit - Exit program
 
         Args:
@@ -325,18 +328,34 @@ class AsciiRenderer:
                 print("\033[2J\033[H", end="", flush=True)
                 print("Regenerating maze...", flush=True)
 
-                # Use the generator engine to create a NEW maze
+                # Always regenerate instantly (cleaner visuals).
+                current_maze = gen.generate(cfg.entry, cfg.exit)
+
                 if self.animate:
-                    # Animate the generation step-by-step
-                    current_maze, current_path = self._animate_maze(
-                        gen, cfg
+                    # Animate the solver only (choose one).
+                    # Option A: always BFS
+                    current_path = self._animate_solver(
+                        gen,
+                        cfg,
+                        current_maze,
+                        solver="bfs",
+                        yield_every=1,
                     )
+
+                    # Option B: always A*
+                    # current_path = self._animate_solver(
+                    #     gen,
+                    #     cfg,
+                    #     current_maze,
+                    #     solver="astar",
+                    #     yield_every=1,
+                    # )
                 else:
-                    # Generate maze instantly
-                    current_maze = gen.generate(cfg.entry, cfg.exit)
-                    # Solve the new maze and update path
+                    # Solve instantly (no animation).
                     current_path = gen.solve(
-                        current_maze, cfg.entry, cfg.exit
+                        current_maze,
+                        cfg.entry,
+                        cfg.exit,
                     )
                 # Write the regenerated maze to output file
                 try:
