@@ -892,3 +892,83 @@ class MazeGenerator:
         return self.solve_bfs_steps(
             maze, entry, exit, yield_every=yield_every
         )
+
+
+    def iter_generation_steps(
+        self,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> Iterator[tuple[Maze, list[str]]]:
+        """Yield intermediate (maze, path_so_far) states during generation."""
+        self._validate_params(entry, exit)
+
+        maze = Maze(
+            self.width,
+            self.height,
+            [[15 for _ in range(self.width)] for _ in range(self.height)],
+        )
+
+        maze.omitted_42 = False
+        try:
+            blocked = self._get_42_coords(maze)
+        except ValueError:
+            blocked = set()
+            maze.omitted_42 = True
+
+        if entry in blocked:
+            raise ValueError("Entry is inside the 42 pattern")
+        if exit in blocked:
+            raise ValueError("Exit is inside the 42 pattern")
+
+        # Step-by-step DFS generation
+        visited: set[tuple[int, int]] = set()
+        stack: list[tuple[int, int]] = []
+
+        visited.add(entry)
+        stack.append(entry)
+
+        while stack:
+            x, y = stack[-1]
+
+            unvisited_neighbors: list[tuple[int, int, str]] = []
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx = x + dx
+                ny = y + dy
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in visited:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                unvisited_neighbors.append((nx, ny, d))
+
+            if not unvisited_neighbors:
+                stack.pop()
+                continue
+
+            nx, ny, d = self.rng.choice(unvisited_neighbors)
+            self._open_wall(maze, x, y, d)
+
+            # Yield after carving a passage
+            yield (maze, [])
+
+            visited.add((nx, ny))
+            stack.append((nx, ny))
+
+        # Optional loops for non-perfect maze
+        if not self.perfect:
+            self._add_loops(maze, blocked=blocked, density=self.density)
+            yield (maze, [])
+
+        # Apply constraints
+        self._stamp_42(maze, blocked)
+
+        for _ in range(self.width * self.height):
+            if not self._has_forbidden_3x3(maze):
+                break
+            self._fix_forbidden_3x3(maze)
+
+        final_path = self.solve(maze, entry, exit)
+
+        # Final frame with solution
+        yield (maze, final_path)
