@@ -42,7 +42,8 @@ class AsciiRenderer:
     def __init__(self) -> None:
         """Initialize renderer with path visibility and wall color palette."""
         self.show_path = True
-        self.animate = False  # Toggle animation on/off
+        self.animate_solver = False  # Toggle solver animation on/off
+        self.animate_generation = False  # Toggle maze generation animation
         # Wall colors that don't conflict with entry (green) or exit (red)
         self.wall_colors = [
             "\033[0m",   # Default (white)
@@ -292,6 +293,37 @@ class AsciiRenderer:
         print("\033[?25h", end="", flush=True)
         return final_path
 
+    def _animate_generation(
+        self,
+        gen: MazeGenerator,
+        cfg: Config,
+        entry: tuple[int, int],
+        exit: tuple[int, int],
+    ) -> tuple[Maze, list[str]]:
+        """Animate maze generation step-by-step.
+
+        Returns the final maze and its solution path.
+        """
+        # Clear once, then only move cursor to home to reduce flicker.
+        print("\033[2J\033[H\033[?25l", end="", flush=True)
+
+        final_maze: Maze | None = None
+        final_path: list[str] = []
+
+        for maze, path in gen.iter_generation_steps(entry, exit):
+            print("\033[H", end="", flush=True)
+            self._draw_maze(maze, cfg, path)
+            final_maze = maze
+            final_path = path
+            time.sleep(self.animation_speed)
+
+        print("\033[?25h", end="", flush=True)
+
+        if final_maze is None:
+            raise RuntimeError("Generation failed")
+
+        return final_maze, final_path
+
     def run(
         self,
         maze: Maze,
@@ -305,7 +337,8 @@ class AsciiRenderer:
             (r)egenerate - Create and solve new maze (instant or animated)
             (p)ath - Toggle solution path display
             (c)olor - Cycle wall color
-            (a)nimation - Toggle solver animation
+            (a)nimation - Toggle solver animation (BFS/A*)
+            (A)nimation - Toggle maze generation animation
             (q)uit - Exit program
 
         Args:
@@ -326,36 +359,54 @@ class AsciiRenderer:
             self._draw_maze(current_maze, cfg, current_path)
 
             # 3. Handle interaction
-            anim_status = " [ANIMATED]" if self.animate else ""
+            solver_status = "ON" if self.animate_solver else "OFF"
+            gen_status = "ON" if self.animate_generation else "OFF"
             cmd = input(
                 f"\n(r)egenerate, (p)ath, (c)olor, "
-                f"(a)nimation{anim_status}, (q)uit: "
-            ).lower()
+                f"(a)nim solver[{solver_status}], "
+                f"(A)nim gen[{gen_status}], (q)uit: "
+            )
 
-            if cmd == 'q':
+            if cmd.lower() == 'q':
                 break
-            elif cmd == 'p':
+            elif cmd.lower() == 'p':
                 self.show_path = not self.show_path
-            elif cmd == 'c':
+            elif cmd.lower() == 'c':
                 # Cycle to next wall color (skip green/red for entry/exit)
                 self.color_index = (
                     (self.color_index + 1) % len(self.wall_colors)
                 )
                 self.wall_color = self.wall_colors[self.color_index]
             elif cmd == 'a':
-                # Toggle animation on/off
-                self.animate = not self.animate
-            elif cmd == 'r':
+                # Toggle solver animation on/off
+                self.animate_solver = not self.animate_solver
+            elif cmd == 'A':
+                # Toggle generation animation on/off
+                self.animate_generation = not self.animate_generation
+            elif cmd.lower() == 'r':
                 # Clear terminal and move cursor to top
                 print("\033[2J\033[H", end="", flush=True)
                 print("Regenerating maze...", flush=True)
 
-                # Always regenerate instantly (cleaner visuals).
-                current_maze = gen.generate(cfg.entry, cfg.exit)
+                # Generate maze (animated or instant)
+                if self.animate_generation:
+                    # Animate the generation process
+                    current_maze, current_path = self._animate_generation(
+                        gen,
+                        cfg,
+                        cfg.entry,
+                        cfg.exit,
+                    )
+                else:
+                    # Generate instantly (no animation)
+                    current_maze = gen.generate(cfg.entry, cfg.exit)
 
-                if self.animate and self.show_path:
-                    # Animate solver only if both animation and path
-                    # are enabled
+                # Solve maze (animated or instant)
+                # This runs after generation, regardless of whether
+                # generation was animated or not
+                if self.animate_solver and self.show_path:
+                    # Animate solver only if both animation and
+                    # path are enabled
                     # Option A: always BFS
                     current_path = self._animate_solver(
                         gen,
@@ -374,12 +425,15 @@ class AsciiRenderer:
                     #     yield_every=1,
                     # )
                 else:
-                    # Solve instantly (no animation).
-                    current_path = gen.solve(
-                        current_maze,
-                        cfg.entry,
-                        cfg.exit,
-                    )
+                    # Solve instantly (no animation)
+                    # Only solve if we didn't animate generation
+                    # (which already includes the solution)
+                    if not self.animate_generation:
+                        current_path = gen.solve(
+                            current_maze,
+                            cfg.entry,
+                            cfg.exit,
+                        )
                 # Write the regenerated maze to output file
                 try:
                     write_output_file(
