@@ -45,6 +45,7 @@ class AsciiRenderer:
         self.show_path = True
         self.animate_solver = False  # Toggle solver animation on/off
         self.animate_generation = False  # Toggle maze generation animation
+        self.algorithm = "dfs"  # Maze generation algorithm (dfs or prim)
         # Wall colors that don't conflict with entry (green) or exit (red)
         self.wall_colors = [
             "\033[0m",   # Default (white)
@@ -342,6 +343,7 @@ class AsciiRenderer:
             (c)olor - Cycle wall color
             (a)nimation - Toggle solver animation (BFS/A*)
             (A)nimation - Toggle maze generation animation
+            (g)eneration - Toggle maze generation algorithm (DFS/Prim)
             (q)uit - Exit program
 
         Args:
@@ -364,10 +366,12 @@ class AsciiRenderer:
             # 3. Handle interaction
             solver_status = "ON" if self.animate_solver else "OFF"
             gen_status = "ON" if self.animate_generation else "OFF"
+            algo_display = self.algorithm.upper()
             cmd = input(
                 f"\n(r)egenerate, (p)ath, (c)olor, "
                 f"(a)nim solver[{solver_status}], "
-                f"(A)nim gen[{gen_status}], (q)uit: "
+                f"(A)nim gen[{gen_status}], "
+                f"(g)en algo[{algo_display}], (q)uit: "
             )
 
             if cmd.lower() == 'q':
@@ -386,10 +390,16 @@ class AsciiRenderer:
             elif cmd == 'A':
                 # Toggle generation animation on/off
                 self.animate_generation = not self.animate_generation
+            elif cmd.lower() == 'g':
+                # Toggle between DFS and Prim algorithms
+                self.algorithm = "prim" if self.algorithm == "dfs" else "dfs"
             elif cmd.lower() == 'r':
                 # Clear terminal and move cursor to top
                 print("\033[2J\033[H", end="", flush=True)
                 print("Regenerating maze...", flush=True)
+
+                # Set the algorithm before generation
+                gen.set_algorithm(self.algorithm)
 
                 # Generate maze (animated or instant)
                 if self.animate_generation:

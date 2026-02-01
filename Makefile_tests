@@ -1,0 +1,226 @@
+# ============================================================
+# Makefile_tests - Test execution for A-Maze-ing project
+# ============================================================
+# Usage:
+#   make -f Makefile_tests [target]
+#
+# Targets:
+#   help          Show this help message
+#   quick         Run basic tests (no pytest required)
+#   all           Run all tests with pytest (saves to test_results.log)
+#   mazegen       Run maze generation tests only
+#   serializer    Run serializer tests only
+#   config        Run config tests only
+#   coverage      Run tests with coverage report
+#   coverage-html Run tests with HTML coverage report
+#   validate      Validate output files with official validator
+#   results       View full test results from test_results.log
+#   failures      View only failed tests from test_results.log
+#   clean         Clean test artifacts and cache files
+# ============================================================
+
+.PHONY: help quick all mazegen serializer config coverage coverage-html validate clean install-deps
+
+# Default target
+.DEFAULT_GOAL := help
+
+# Python interpreter
+PYTHON := python3
+
+# Test directory
+TEST_DIR := tests
+
+# Source files (for coverage)
+SOURCE := mazegen.py serializer.py config.py renderer_ascii.py
+
+help:
+	@echo "A-Maze-ing Test Suite"
+	@echo "====================="
+	@echo ""
+	@echo "⭐ Quick Start (no installation needed):"
+	@echo "  make -f Makefile_tests quick"
+	@echo ""
+	@echo "For full pytest features, install dependencies:"
+	@echo "  Option 1 (easiest): sudo apt install python3-pytest python3-pytest-cov"
+	@echo "  Option 2: make -f Makefile_tests install-deps"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  quick          - Run basic tests (no pytest needed) ⭐"
+	@echo "  install-deps   - Show pytest installation instructions"
+	@echo "  all            - Run all tests with pytest (saves output to test_results.log)"
+	@echo "  mazegen        - Run maze generation tests only"
+	@echo "  serializer     - Run serializer tests only"
+	@echo "  config         - Run config parsing tests only"
+	@echo "  coverage       - Run tests with coverage report"
+	@echo "  coverage-html  - Run tests with HTML coverage report"
+	@echo "  validate       - Validate test output files"
+	@echo ""
+	@echo "View Test Results:"
+	@echo "  results        - Show full test results (from test_results.log)"
+	@echo "  failures       - Show only failed tests (from test_results.log)"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  clean          - Clean test artifacts and logs"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make -f Makefile_tests quick          # Fast basic tests (no setup)"
+	@echo "  sudo apt install python3-pytest       # Install pytest via apt"
+	@echo "  make -f Makefile_tests all            # Run all tests, save results to log"
+	@echo "  make -f Makefile_tests results        # View full test results"
+	@echo "  make -f Makefile_tests failures       # View only failed tests"
+
+quick:
+	@echo "Running basic tests (no pytest required)..."
+	@$(PYTHON) $(TEST_DIR)/run_basic_tests.py
+
+all:
+	@echo "Running all tests with pytest..."
+	@echo ""
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -v --tb=line 2>&1 | tee test_results.log; \
+	RESULT=$$?; \
+	echo ""; \
+	echo "════════════════════════════════════════════════════════════════"; \
+	echo "Full test results saved to: test_results.log"; \
+	echo "════════════════════════════════════════════════════════════════"; \
+	exit $$RESULT
+
+mazegen:
+	@echo "Running maze generation tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_mazegen.py -v
+
+serializer:
+	@echo "Running serializer tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_serializer.py -v
+
+config:
+	@echo "Running config parsing tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_config.py -v
+
+coverage:
+	@echo "Running tests with coverage report..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -v --cov=. --cov-report=term-missing
+
+coverage-html:
+	@echo "Running tests with HTML coverage report..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -v --cov=. --cov-report=html
+	@echo ""
+	@echo "Coverage report generated in htmlcov/index.html"
+	@echo "Open with: xdg-open htmlcov/index.html (Linux) or open htmlcov/index.html (Mac)"
+
+validate:
+	@echo "Validating test output files with official validator..."
+	@for file in $(TEST_DIR)/*.txt; do \
+		if [ -f "$$file" ]; then \
+			echo "Validating $$file..."; \
+			$(PYTHON) $(TEST_DIR)/output_validator.py "$$file"; \
+		fi; \
+	done
+
+clean:
+	@echo "Cleaning test artifacts..."
+	@rm -rf $(TEST_DIR)/__pycache__
+	@rm -rf $(TEST_DIR)/.pytest_cache
+	@rm -rf .pytest_cache
+	@rm -rf htmlcov
+	@rm -rf .coverage
+	@rm -f $(TEST_DIR)/*.pyc
+	@rm -f $(TEST_DIR)/test_*.txt
+	@rm -f $(TEST_DIR)/*.txt.tmp
+	@rm -f test_results.log
+	@echo "Clean complete."
+
+install-deps:
+	@echo "Installing test dependencies..."
+	@echo ""
+	@echo "NOTE: If you get 'externally-managed-environment' error:"
+	@echo "      Your system requires using a virtual environment."
+	@echo ""
+	@echo "Option 1: Use system package manager (recommended):"
+	@echo "  sudo apt install python3-pytest python3-pytest-cov"
+	@echo ""
+	@echo "Option 2: Create a virtual environment:"
+	@echo "  python3 -m venv venv"
+	@echo "  source venv/bin/activate"
+	@echo "  pip install pytest pytest-cov"
+	@echo ""
+	@echo "Option 3: Override system protection (not recommended):"
+	@echo "  pip install --break-system-packages pytest pytest-cov"
+	@echo ""
+	@read -p "Press Enter to attempt pip install (or Ctrl+C to cancel)..." dummy; \
+	$(PYTHON) -m pip install pytest pytest-cov 2>/dev/null || \
+	(echo ""; \
+	 echo "Installation failed. Please use one of the options above."; \
+	 echo ""; \
+	 echo "For now, you can use: make -f Makefile_tests quick"; \
+	 echo "(This runs basic tests without pytest)"; \
+	 exit 1)
+
+# Advanced targets for specific test groups
+test-structure:
+	@echo "Running maze structure tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_mazegen.py::TestMazeStructure -v
+
+test-generation:
+	@echo "Running maze generation tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_mazegen.py::TestMazeGeneration -v
+
+test-solving:
+	@echo "Running maze solving tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_mazegen.py::TestMazeSolving -v
+
+test-constraints:
+	@echo "Running constraint tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_mazegen.py::TestMazeConstraints -v
+
+test-output-format:
+	@echo "Running output format tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_serializer.py::TestOutputFileFormat -v
+
+test-validation:
+	@echo "Running validation tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/test_serializer.py::TestOutputValidation -v
+
+# Run tests in parallel (requires pytest-xdist)
+parallel:
+	@echo "Running tests in parallel..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -v -n auto
+
+# Run tests with detailed output
+verbose:
+	@echo "Running tests with detailed output..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -vv -s
+
+# Run only failed tests from last run
+failed:
+	@echo "Re-running failed tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ --lf -v
+
+# Run tests and stop at first failure
+fast-fail:
+	@echo "Running tests (stop at first failure)..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ -v -x
+
+# Show test collection without running
+collect:
+	@echo "Collecting tests..."
+	@$(PYTHON) -m pytest $(TEST_DIR)/ --collect-only
+
+# View last test results
+results:
+	@if [ -f test_results.log ]; then \
+		echo "Test Results (test_results.log):"; \
+		echo "════════════════════════════════════════════════════════════════"; \
+		cat test_results.log; \
+	else \
+		echo "No test results found. Run 'make -f Makefile_tests all' first."; \
+	fi
+
+# View only failed tests from last run
+failures:
+	@if [ -f test_results.log ]; then \
+		echo "Failed Tests:"; \
+		echo "════════════════════════════════════════════════════════════════"; \
+		grep "FAILED\|ERROR" test_results.log || echo "No failures found!"; \
+	else \
+		echo "No test results found. Run 'make -f Makefile_tests all' first."; \
+	fi
