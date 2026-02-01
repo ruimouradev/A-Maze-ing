@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mazegen import MazeGenerator, Maze
+from mazegen import MazeGenerator, Maze  # noqa: E402
 
 
 class TestMazeStructure:
@@ -145,20 +146,16 @@ class TestMazeConstraints:
         for y in range(sample_maze.height):
             assert sample_maze.cells[y][-1] & 2  # East wall bit
 
-    @pytest.mark.skip(
-        reason="Test assumes 42 stamp exists; depends on maze size and "
-               "implementation. Use run_basic_tests.py instead."
-    )
-    def test_stamp_42_exists_in_large_maze(self, medium_config):
-        """Test that 42 stamp exists in mazes large enough."""
+    def test_stamp_42_exists_in_large_maze(self, large_config):
+        """Test that 42 stamp exists in mazes large enough (≥11x9)."""
         gen = MazeGenerator(
-            medium_config.width,
-            medium_config.height,
+            large_config.width,
+            large_config.height,
             seed=42,
             perfect=True,
             algorithm="dfs",
         )
-        maze = gen.generate(medium_config.entry, medium_config.exit)
+        maze = gen.generate(large_config.entry, large_config.exit)
 
         # Large maze should have 42 stamp
         assert not maze.omitted_42
@@ -356,18 +353,6 @@ class TestEdgeCases:
         )
         maze_imperfect = gen_imperfect.generate(
             small_config.entry, small_config.exit
-        )
-
-        # Count total walls
-        perfect_walls = sum(
-            bin(cell).count('1')
-            for row in maze_perfect.cells
-            for cell in row
-        )
-        imperfect_walls = sum(
-            bin(cell).count('1')
-            for row in maze_imperfect.cells
-            for cell in row
         )
 
         # Both should be valid mazes
