@@ -898,6 +898,87 @@ class MazeGenerator:
         )
 
 
+    def _iter_dfs_generation_steps(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> Iterator[tuple[Maze, list[str]]]:
+        """Yield intermediate (maze, []) states during DFS generation."""
+        visited: set[tuple[int, int]] = set()
+        stack: list[tuple[int, int]] = []
+
+        visited.add(entry)
+        stack.append(entry)
+
+        while stack:
+            x, y = stack[-1]
+
+            unvisited_neighbors: list[tuple[int, int, str]] = []
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx = x + dx
+                ny = y + dy
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in visited:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                unvisited_neighbors.append((nx, ny, d))
+
+            if not unvisited_neighbors:
+                stack.pop()
+                continue
+
+            nx, ny, d = self.rng.choice(unvisited_neighbors)
+            self._open_wall(maze, x, y, d)
+
+            # Yield after carving a passage
+            yield (maze, [])
+
+            visited.add((nx, ny))
+            stack.append((nx, ny))
+
+    def _iter_prim_generation_steps(
+        self,
+        maze: Maze,
+        entry: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> Iterator[tuple[Maze, list[str]]]:
+        """Yield intermediate (maze, []) states during Prim generation."""
+        in_tree: set[tuple[int, int]] = set()
+        frontier: list[tuple[int, int, int, int, str]] = []
+
+        def add_frontier(x: int, y: int) -> None:
+            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                nx, ny = x + dx, y + dy
+                if not self._in_bounds(nx, ny):
+                    continue
+                if (nx, ny) in in_tree:
+                    continue
+                if (nx, ny) in blocked:
+                    continue
+                frontier.append((x, y, nx, ny, d))
+
+        sx, sy = entry
+        in_tree.add((sx, sy))
+        add_frontier(sx, sy)
+
+        while frontier:
+            i = self.rng.randrange(len(frontier))
+            x, y, nx, ny, d = frontier.pop(i)
+
+            if (nx, ny) in in_tree:
+                continue
+
+            self._open_wall(maze, x, y, d)
+
+            # Yield after carving a passage
+            yield (maze, [])
+
+            in_tree.add((nx, ny))
+            add_frontier(nx, ny)
+
     def iter_generation_steps(
         self,
         entry: tuple[int, int],
@@ -928,108 +1009,18 @@ class MazeGenerator:
         algo = self.algorithm.lower().strip() if self.algorithm else "dfs"
 
         if algo in ("dfs", "recursive_backtracker"):
-            # Step-by-step DFS generation
-            visited: set[tuple[int, int]] = set()
-            stack: list[tuple[int, int]] = []
-
-            visited.add(entry)
-            stack.append(entry)
-
-            while stack:
-                x, y = stack[-1]
-
-                unvisited_neighbors: list[tuple[int, int, str]] = []
-                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                    nx = x + dx
-                    ny = y + dy
-                    if not self._in_bounds(nx, ny):
-                        continue
-                    if (nx, ny) in visited:
-                        continue
-                    if (nx, ny) in blocked:
-                        continue
-                    unvisited_neighbors.append((nx, ny, d))
-
-                if not unvisited_neighbors:
-                    stack.pop()
-                    continue
-
-                nx, ny, d = self.rng.choice(unvisited_neighbors)
-                self._open_wall(maze, x, y, d)
-
-                # Yield after carving a passage
-                yield (maze, [])
-
-                visited.add((nx, ny))
-                stack.append((nx, ny))
-
+            yield from self._iter_dfs_generation_steps(
+                maze, entry=entry, blocked=blocked
+            )
         elif algo == "prim":
-            # Step-by-step Prim generation
-            in_tree: set[tuple[int, int]] = set()
-            frontier: list[tuple[int, int, int, int, str]] = []
-
-            def add_frontier(x: int, y: int) -> None:
-                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                    nx, ny = x + dx, y + dy
-                    if not self._in_bounds(nx, ny):
-                        continue
-                    if (nx, ny) in in_tree:
-                        continue
-                    if (nx, ny) in blocked:
-                        continue
-                    frontier.append((x, y, nx, ny, d))
-
-            sx, sy = entry
-            in_tree.add((sx, sy))
-            add_frontier(sx, sy)
-
-            while frontier:
-                i = self.rng.randrange(len(frontier))
-                x, y, nx, ny, d = frontier.pop(i)
-
-                if (nx, ny) in in_tree:
-                    continue
-
-                self._open_wall(maze, x, y, d)
-
-                # Yield after carving a passage
-                yield (maze, [])
-
-                in_tree.add((nx, ny))
-                add_frontier(nx, ny)
-
+            yield from self._iter_prim_generation_steps(
+                maze, entry=entry, blocked=blocked
+            )
         else:
             # Fallback: behave like DFS
-            visited: set[tuple[int, int]] = set()
-            stack: list[tuple[int, int]] = []
-
-            visited.add(entry)
-            stack.append(entry)
-
-            while stack:
-                x, y = stack[-1]
-
-                unvisited_neighbors: list[tuple[int, int, str]] = []
-                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                    nx = x + dx
-                    ny = y + dy
-                    if not self._in_bounds(nx, ny):
-                        continue
-                    if (nx, ny) in visited:
-                        continue
-                    if (nx, ny) in blocked:
-                        continue
-                    unvisited_neighbors.append((nx, ny, d))
-
-                if not unvisited_neighbors:
-                    stack.pop()
-                    continue
-
-                nx, ny, d = self.rng.choice(unvisited_neighbors)
-                self._open_wall(maze, x, y, d)
-                yield (maze, [])
-                visited.add((nx, ny))
-                stack.append((nx, ny))
+            yield from self._iter_dfs_generation_steps(
+                maze, entry=entry, blocked=blocked
+            )
 
         # Optional loops for non-perfect maze
         if not self.perfect:
