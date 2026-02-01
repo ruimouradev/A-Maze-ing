@@ -312,7 +312,9 @@ class AsciiRenderer:
 
         for maze, path in gen.iter_generation_steps(entry, exit):
             print("\033[H", end="", flush=True)
-            self._draw_maze(maze, cfg, path)
+            # Don't show the path during generation animation
+            # to avoid flashing the solution before solver animation
+            self._draw_maze(maze, cfg, [])
             final_maze = maze
             final_path = path
             time.sleep(self.animation_speed)
