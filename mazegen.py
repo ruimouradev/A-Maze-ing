@@ -93,6 +93,10 @@ class MazeGenerator:
         # Density is used only when perfect=False (to create loops).
         self.density = density
 
+    def set_algorithm(self, algorithm: str) -> None:
+        """Set the maze generation algorithm at runtime."""
+        self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
+
     # Checking if the coordinates are inside the maze.
     def _in_bounds(self, x: int, y: int) -> bool:
         """Return True if (x, y) is inside the maze grid."""
@@ -920,40 +924,112 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # Step-by-step DFS generation
-        visited: set[tuple[int, int]] = set()
-        stack: list[tuple[int, int]] = []
+        # Step-by-step generation (algorithm-aware)
+        algo = self.algorithm.lower().strip() if self.algorithm else "dfs"
 
-        visited.add(entry)
-        stack.append(entry)
+        if algo in ("dfs", "recursive_backtracker"):
+            # Step-by-step DFS generation
+            visited: set[tuple[int, int]] = set()
+            stack: list[tuple[int, int]] = []
 
-        while stack:
-            x, y = stack[-1]
+            visited.add(entry)
+            stack.append(entry)
 
-            unvisited_neighbors: list[tuple[int, int, str]] = []
-            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                nx = x + dx
-                ny = y + dy
-                if not self._in_bounds(nx, ny):
+            while stack:
+                x, y = stack[-1]
+
+                unvisited_neighbors: list[tuple[int, int, str]] = []
+                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                    nx = x + dx
+                    ny = y + dy
+                    if not self._in_bounds(nx, ny):
+                        continue
+                    if (nx, ny) in visited:
+                        continue
+                    if (nx, ny) in blocked:
+                        continue
+                    unvisited_neighbors.append((nx, ny, d))
+
+                if not unvisited_neighbors:
+                    stack.pop()
                     continue
-                if (nx, ny) in visited:
+
+                nx, ny, d = self.rng.choice(unvisited_neighbors)
+                self._open_wall(maze, x, y, d)
+
+                # Yield after carving a passage
+                yield (maze, [])
+
+                visited.add((nx, ny))
+                stack.append((nx, ny))
+
+        elif algo == "prim":
+            # Step-by-step Prim generation
+            in_tree: set[tuple[int, int]] = set()
+            frontier: list[tuple[int, int, int, int, str]] = []
+
+            def add_frontier(x: int, y: int) -> None:
+                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                    nx, ny = x + dx, y + dy
+                    if not self._in_bounds(nx, ny):
+                        continue
+                    if (nx, ny) in in_tree:
+                        continue
+                    if (nx, ny) in blocked:
+                        continue
+                    frontier.append((x, y, nx, ny, d))
+
+            sx, sy = entry
+            in_tree.add((sx, sy))
+            add_frontier(sx, sy)
+
+            while frontier:
+                i = self.rng.randrange(len(frontier))
+                x, y, nx, ny, d = frontier.pop(i)
+
+                if (nx, ny) in in_tree:
                     continue
-                if (nx, ny) in blocked:
+
+                self._open_wall(maze, x, y, d)
+
+                # Yield after carving a passage
+                yield (maze, [])
+
+                in_tree.add((nx, ny))
+                add_frontier(nx, ny)
+
+        else:
+            # Fallback: behave like DFS
+            visited: set[tuple[int, int]] = set()
+            stack: list[tuple[int, int]] = []
+
+            visited.add(entry)
+            stack.append(entry)
+
+            while stack:
+                x, y = stack[-1]
+
+                unvisited_neighbors: list[tuple[int, int, str]] = []
+                for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
+                    nx = x + dx
+                    ny = y + dy
+                    if not self._in_bounds(nx, ny):
+                        continue
+                    if (nx, ny) in visited:
+                        continue
+                    if (nx, ny) in blocked:
+                        continue
+                    unvisited_neighbors.append((nx, ny, d))
+
+                if not unvisited_neighbors:
+                    stack.pop()
                     continue
-                unvisited_neighbors.append((nx, ny, d))
 
-            if not unvisited_neighbors:
-                stack.pop()
-                continue
-
-            nx, ny, d = self.rng.choice(unvisited_neighbors)
-            self._open_wall(maze, x, y, d)
-
-            # Yield after carving a passage
-            yield (maze, [])
-
-            visited.add((nx, ny))
-            stack.append((nx, ny))
+                nx, ny, d = self.rng.choice(unvisited_neighbors)
+                self._open_wall(maze, x, y, d)
+                yield (maze, [])
+                visited.add((nx, ny))
+                stack.append((nx, ny))
 
         # Optional loops for non-perfect maze
         if not self.perfect:
