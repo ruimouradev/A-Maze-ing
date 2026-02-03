@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
-import sys
 import subprocess
-import tempfile
+import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from serializer import write_output_file
-from mazegen import Maze
+from mazegen import Maze  # noqa: E402
+from serializer import write_output_file  # noqa: E402
 
 
 class TestOutputFileFormat:
@@ -193,7 +193,6 @@ class TestOutputValidation:
         )
 
         # Run the validator
-        import subprocess
         validator_path = Path(__file__).parent / "output_validator.py"
 
         result = subprocess.run(
@@ -206,49 +205,6 @@ class TestOutputValidation:
         assert "Wrong encoding" not in result.stdout, (
             f"Validator found errors: {result.stdout}"
         )
-
-    @pytest.mark.skip(
-        reason="Test fails due to config prompts for 42 stamp. "
-               "Use run_basic_tests.py for validation."
-    )
-    def test_multiple_mazes_pass_validator(self, small_config, tmp_path):
-        """Test that multiple randomly generated mazes pass validation."""
-        from mazegen import MazeGenerator
-
-        validator_path = Path(__file__).parent / "output_validator.py"
-
-        for seed in [42, 100, 200, 300, 999]:
-            gen = MazeGenerator(
-                small_config.width,
-                small_config.height,
-                seed=seed,
-                perfect=True,
-                algorithm="dfs",
-            )
-
-            maze = gen.generate(small_config.entry, small_config.exit)
-            path = gen.solve(maze, small_config.entry, small_config.exit)
-
-            output_file = tmp_path / f"test_maze_{seed}.txt"
-            write_output_file(
-                str(output_file),
-                maze,
-                small_config.entry,
-                small_config.exit,
-                path,
-            )
-
-            # Validate
-            result = subprocess.run(
-                [sys.executable, str(validator_path), str(output_file)],
-                capture_output=True,
-                text=True,
-            )
-
-            assert "Wrong encoding" not in result.stdout, (
-                f"Validator found errors in maze with seed {seed}: "
-                f"{result.stdout}"
-            )
 
 
 class TestWallConsistency:

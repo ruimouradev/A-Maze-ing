@@ -41,21 +41,24 @@ from serializer import write_output_file
 class AsciiRenderer:
     def __init__(self) -> None:
         """Initialize renderer with path visibility and wall color palette."""
-        self.show_path = True
-        self.animate_solver = False  # Toggle solver animation on/off
-        self.animate_generation = False  # Toggle maze generation animation
-        self.algorithm = "dfs"  # Maze generation algorithm (dfs or prim)
+        self.show_path: bool = True
+        # Toggle solver animation on/off
+        self.animate_solver: bool = False
+        # Toggle maze generation animation
+        self.animate_generation: bool = False
+        # Maze generation algorithm (dfs or prim)
+        self.algorithm: str = "dfs"
         # Wall colors that don't conflict with entry (green) or exit (red)
-        self.wall_colors = [
+        self.wall_colors: list[str] = [
             "\033[0m",   # Default (white)
             "\033[33m",  # Yellow
             "\033[34m",  # Blue
             "\033[36m",  # Cyan
             "\033[35m",  # Magenta
         ]
-        self.color_index = 0
-        self.wall_color = self.wall_colors[0]
-        self.animation_speed = 0.01  # 10ms per frame
+        self.color_index: int = 0
+        self.wall_color: str = self.wall_colors[0]
+        self.animation_speed: float = 0.01  # 10ms per frame
 
     def _draw_maze(
         self,
