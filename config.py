@@ -47,6 +47,8 @@ class Config:
     algorithm: str = "dfs"
     display: str = "ascii"
     animate: bool = False
+    animate_solver: bool = False
+    animate_generation: bool = False
     step_delay_ms: int = 25
     density: float = 0.06
 
@@ -82,6 +84,19 @@ def _parse_density(value: str) -> float:
     except (ValueError, TypeError):
         msg = f"Invalid density value (expected float 0.0-1.0): {value}"
         raise ValueError(msg)
+
+
+def _parse_optional_int(value: Optional[str]) -> Optional[int]:
+    """Converts string values to optional int (None if empty/None)."""
+    if value is None:
+        return None
+    text = value.strip()
+    if not text or text.lower() == "none":
+        return None
+    try:
+        return int(text)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid integer value: {value}")
 
 
 def _parse_coord(value: str) -> tuple[int, int]:
@@ -144,13 +159,12 @@ def load_config(path: str) -> Config:
 
         # Check if maze is too small for 42 stamp
         if width < 11 or height < 9:
-            print("Error: Maze too small for 42 pattern")
+            print("Warning: Maze too small for 42 pattern")
             response = input(
                 "Do you want to continue without 42 pattern? (y/n): "
             )
             if response.lower() != 'y':
-                import sys
-                sys.exit(0)
+                raise ValueError("Maze too small for 42 pattern")
 
         # convert entry/exit coordinates from str to int
         entry = _parse_coord(data["ENTRY"])
@@ -183,6 +197,33 @@ def load_config(path: str) -> Config:
                 f"Directory for output file does not exist: {out_p.parent}"
             )
 
+        seed_raw = data.get("SEED")
+        seed = _parse_optional_int(seed_raw)
+        if seed is None and seed_raw is None:
+            seed = 42
+        algorithm = data.get("ALGORITHM", "dfs").lower()
+        allowed_algorithms = {"dfs", "prim", "kruskal", "wilson"}
+        if algorithm not in allowed_algorithms:
+            raise ValueError(
+                "ALGORITHM must be one of: dfs, prim, kruskal, wilson"
+            )
+
+        display = data.get("DISPLAY", "ascii").lower()
+        if display not in {"ascii"}:
+            raise ValueError("DISPLAY must be 'ascii'")
+
+        animate_default = _parse_bool(data.get("ANIMATE", "False"))
+        animate_solver = _parse_bool(
+            data.get("ANIMATE_SOLVER", str(animate_default))
+        )
+        animate_generation = _parse_bool(
+            data.get("ANIMATE_GENERATION", str(animate_default))
+        )
+
+        step_delay_ms = int(data.get("STEP_DELAY_MS", 25))
+        if step_delay_ms < 0:
+            raise ValueError("STEP_DELAY_MS must be >= 0")
+
         return Config(
             width=width,
             height=height,
@@ -191,13 +232,15 @@ def load_config(path: str) -> Config:
             output_file=data["OUTPUT_FILE"],
             perfect=_parse_bool(data["PERFECT"]),
 
-            # Optional Bonus parsing: errors not checked; only defaults for now
-            seed=int(data.get("SEED", 42)),
-            algorithm=data.get("ALGORITHM", "dfs").lower(),
-            display=data.get("DISPLAY", "ascii").lower(),
-            animate=_parse_bool(data.get("ANIMATE", "False")),
-            step_delay_ms=int(data.get("STEP_DELAY_MS", 25)),
-            density=_parse_density(data.get("DENSITY", "0.06"))
+            # Optional Bonus parsed
+            seed=seed,
+            algorithm=algorithm,
+            display=display,
+            animate=animate_default,
+            animate_solver=animate_solver,
+            animate_generation=animate_generation,
+            step_delay_ms=step_delay_ms,
+            density=_parse_density(data.get("DENSITY", "0.06")),
         )
 
     except ValueError as e:
