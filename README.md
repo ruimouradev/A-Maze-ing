@@ -62,12 +62,14 @@ OUTPUT_FILE=maze.txt        # Output file path for hexadecimal maze
 PERFECT=True                # True for perfect maze (no loops), False for imperfect
 
 # Bonus fields (optional, have sensible defaults)
-SEED=42                     # Random seed for deterministic generation (default: None)
-ALGORITHM=dfs               # Generation algorithm: dfs|prim (default: dfs)
-DISPLAY=ascii               # Display mode: ascii (default: ascii)
-ANIMATE=False               # Enable animation during generation (default: False)
-STEP_DELAY_MS=25            # Milliseconds per animation frame (default: 25)
-DENSITY=0.06                # Imperfect maze density [0.0-1.0] (default: 0.06)
+SEED=42                     # Random seed (default: 42; use empty/None to disable)
+ALGORITHM=dfs               # Generation algorithm: dfs|prim|kruskal|wilson
+DISPLAY=ascii               # Display mode: ascii
+ANIMATE=False               # Legacy toggle (applies to both solver & generator)
+ANIMATE_SOLVER=False        # Animate solver (BFS/A*) steps
+ANIMATE_GENERATION=False    # Animate generation steps
+STEP_DELAY_MS=25            # Milliseconds per animation frame (>= 0)
+DENSITY=0.06                # Imperfect maze density [0.0-1.0]
 
 # Comments are supported (lines starting with #)
 # Empty lines are ignored
@@ -83,7 +85,8 @@ OUTPUT_FILE=my_maze.txt
 PERFECT=True
 SEED=123
 ALGORITHM=prim
-ANIMATE=True
+ANIMATE_SOLVER=True
+ANIMATE_GENERATION=True
 STEP_DELAY_MS=50
 ```
 
@@ -100,6 +103,8 @@ Once the maze is displayed, the following commands are available:
 | `A` | Toggle maze generation animation (step-by-step generation display) |
 | `g` | Toggle between DFS and Prim generation algorithms |
 | `q` | Quit the program |
+
+Config equivalents: set `ANIMATE_SOLVER` and `ANIMATE_GENERATION` in the config file to control the initial state of `a`/`A` before runtime toggles.
 
 ---
 
