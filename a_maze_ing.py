@@ -16,21 +16,21 @@
 #   6) Launch ASCII renderer loop
 #
 # BONUS hooks:
-#   - Support cfg.animate: if True, prefer gen.iter_steps(...) for animation
+#   - Support animation toggles (solver/generation)
 #   - Support changing algorithm at runtime via renderer commands
 #
 # MUST NOT:
 #   - Implement algorithms
 #   - Modify maze internals directly
 
-from __future__ import annotations  # Enable forward type hints
+from __future__ import annotations
 
-import sys  # Used to read command-line arguments and exit codes
+import sys
 
-from config import load_config          # Reads and validates config file
-from mazegen import MazeGenerator       # Core maze engine (Rui)
-from serializer import write_output_file  # Writes maze to output file
-from renderer_ascii import AsciiRenderer  # Terminal ASCII UI
+from config import load_config
+from mazegen import MazeGenerator
+from serializer import write_output_file
+from renderer_ascii import AsciiRenderer
 
 
 def main(argv: list[str]) -> int:
@@ -44,8 +44,7 @@ def main(argv: list[str]) -> int:
         5. Launch interactive ASCII renderer
 
     Args:
-        argv: Command-line arguments; argv[0]=script name,
-            argv[1]=config file path.
+        argv: Command-line arguments (argv[1] is the config file path).
 
     Returns:
         Exit code: 0 (success), 1 (config/write error), 2 (usage error).

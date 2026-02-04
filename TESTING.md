@@ -83,12 +83,10 @@ tests/
 - ✅ 42 stamp enclosed
 - ✅ No 3x3 open areas
 
-**Maze Solving (5 tests)**
+**Maze Solving (3 tests)**
 - ✅ BFS finds valid path
-- ✅ A* finds valid path
 - ✅ Path reaches exit
 - ✅ Path respects walls
-- ✅ Both algorithms produce valid paths
 
 **Edge Cases (6 tests)**
 - ✅ Invalid entry rejected
@@ -177,7 +175,7 @@ make -f Makefile_tests clean
 **75+ unit tests** covering:
 
 - ✅ **Maze Generation**: DFS, Prim algorithms, determinism
-- ✅ **Maze Solving**: BFS, A* pathfinding
+- ✅ **Maze Solving**: BFS pathfinding
 - ✅ **Constraints**: 42 stamp, borders, 3x3 areas
 - ✅ **File I/O**: Hex encoding, format validation
 - ✅ **Configuration**: Parsing, validation, defaults

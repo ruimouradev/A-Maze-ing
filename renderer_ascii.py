@@ -14,18 +14,18 @@
 #   4) Change wall colors (ANSI)
 #   5) Regenerate maze
 #
-# BONUS: Still to be implemented
-#   - Toggle animation (cfg.animate)
-#   - Change algorithm at runtime (dfs/prim/kruskal/wilson)
-#   - Display generation steps using gen.iter_steps(...) when available
+# BONUS: Implemented
+#   - Toggle solver/generation animation
+#   - Change algorithm at runtime (dfs/prim)
+#   - Display generation steps using gen.iter_generation_steps(...)
 #
 # Recommended commands:
 #   r = regenerate
 #   p = toggle path
 #   c = cycle colors
 #
-#   NOT IMPLEMENTED YET
-#   a = toggle animation
+#   a = toggle solver animation
+#   A = toggle generation animation
 #   g = change algorithm
 #   q = quit
 
@@ -40,11 +40,11 @@ from serializer import write_output_file
 
 class AsciiRenderer:
     def __init__(self) -> None:
-        """Initialize renderer with path visibility and wall color palette."""
+        """Initialize renderer state and UI defaults."""
         self.show_path: bool = True
-        # Toggle solver animation on/off
+        # Solver animation toggle
         self.animate_solver: bool = False
-        # Toggle maze generation animation
+        # Generation animation toggle
         self.animate_generation: bool = False
         # Maze generation algorithm (dfs or prim)
         self.algorithm: str = "dfs"
@@ -58,7 +58,7 @@ class AsciiRenderer:
         ]
         self.color_index: int = 0
         self.wall_color: str = self.wall_colors[0]
-        self.animation_speed: float = 0.01  # 10ms per frame
+        self.animation_speed: float = 0.01  # seconds per frame
 
     def _draw_maze(
         self,
@@ -69,17 +69,22 @@ class AsciiRenderer:
         frontier: set[tuple[int, int]] | None = None,
         current: tuple[int, int] | None = None,
     ) -> None:
-        """Render maze grid with walls, entry, exit, and solution path.
+        """Render the maze as ASCII with colors and optional overlays.
 
-        Uses 3×3 ASCII blocks per cell: corners and walls are colored blocks,
-        entry/exit/path are colored center characters, floors are spaces.
+        The renderer builds a 2× resolution grid: cell centers hold
+        entry/exit/path markers, walls are drawn on edges, and junctions are
+        resolved for clean line drawing. Optional overlays show the solver
+        state (visited/frontier/current) and the 42 stamp.
 
         Args:
             maze: Maze grid with wall bitmasks (0-15).
             cfg: Configuration with entry/exit coordinates.
             path: Solution path as direction list to convert to coordinates.
+            visited: Cells visited by the solver.
+            frontier: Cells on the solver frontier.
+            current: Current solver position.
         """
-        # Define colors
+        # ANSI colors
         WALL_COLOR = self.wall_color  # Set by user interaction
         ENTRY_COLOR = "\033[32m"      # Green
         EXIT_COLOR = "\033[31m"       # Red
@@ -89,7 +94,7 @@ class AsciiRenderer:
 
         BLOCK = "█"
 
-        # Convert path directions to coordinates
+        # Convert path directions to coordinates and connectors
         path_coords = set()
         path_connectors: set[tuple[int, int, str]] = set()
         stamp_coords: set[tuple[int, int]] = getattr(
@@ -118,7 +123,7 @@ class AsciiRenderer:
                     # Skip invalid directions
                     continue
                 path_coords.add((x, y))
-            # Ensure exit is in path_coords
+            # Ensure exit is included
             path_coords.add(cfg.exit)
 
         wall_chars = {
@@ -165,7 +170,7 @@ class AsciiRenderer:
 
         for y, row in enumerate(maze.cells):
             for x, cell_value in enumerate(row):
-                # 1. Determine cell type and center character
+                # 1) Determine cell type and center character
                 if (x, y) == cfg.entry:
                     center_char = f"{ENTRY_COLOR}{BLOCK}{RESET}"
                 elif (x, y) == cfg.exit:
@@ -173,11 +178,11 @@ class AsciiRenderer:
                 elif has_stamp and (x, y) in stamp_coords:
                     center_char = f"{STAMP_COLOR}{BLOCK}{RESET}"
                 elif current and (x, y) == current:
-                    center_char = "\033[95m█\033[0m"   # roxo = cursor
+                    center_char = "\033[95m█\033[0m"  # cursor
                 elif frontier and (x, y) in frontier:
-                    center_char = "\033[94m█\033[0m"   # azul = frontier
+                    center_char = "\033[94m█\033[0m"  # frontier
                 elif visited and (x, y) in visited:
-                    center_char = "\033[90m█\033[0m"   # cinza = visited
+                    center_char = "\033[90m█\033[0m"  # visited
                 elif (x, y) in path_coords:
                     center_char = f"{PATH_COLOR}{BLOCK}{RESET}"
                 else:
@@ -185,7 +190,7 @@ class AsciiRenderer:
 
                 grid[2 * y + 1][2 * x + 1] = center_char
 
-                # 2. Build the walls using bitmasking
+                # 2) Build the walls using bitmasking
                 # (cell_value is 0-15: N=1, E=2, S=4, W=8)
                 n_wall_exists = bool(cell_value & 1)
                 e_wall_exists = bool(cell_value & 2)
@@ -201,7 +206,7 @@ class AsciiRenderer:
                 if e_wall_exists:
                     grid[2 * y + 1][2 * x + 2] = "│"
 
-        # 3. Add path connectors so color is continuous between cells
+        # 3) Add path connectors so color is continuous between cells
         for gy, gx, orient in path_connectors:
             if 0 <= gy < grid_h and 0 <= gx < grid_w:
                 if grid[gy][gx] == " ":
@@ -211,7 +216,7 @@ class AsciiRenderer:
             (2 * y + 1, 2 * x + 1) for (x, y) in path_coords
         }
 
-        # 4. Resolve junctions for continuous lines
+        # 4) Resolve junctions for continuous lines
         for gy in range(0, grid_h, 2):
             for gx in range(0, grid_w, 2):
                 up = gy > 0 and grid[gy - 1][gx] == "│"
@@ -220,7 +225,7 @@ class AsciiRenderer:
                 right = gx < grid_w - 1 and grid[gy][gx + 1] == "─"
                 grid[gy][gx] = _junction_char(up, down, left, right)
 
-        # 5. Print the grid with colored walls
+        # 5) Print the grid with colored walls and path
         right_edge_chars = {"─", "┌", "└", "├", "┬", "┴", "┼"}
         for gy, grid_row in enumerate(grid):
             line = ""
@@ -256,21 +261,13 @@ class AsciiRenderer:
         solver: str = "bfs",
         yield_every: int = 1,
     ) -> list[str]:
-        """Animate solver (BFS / A*) step-by-step.
+        """Animate solver (BFS) step-by-step.
 
-        We keep maze generation instant, and animate only the solver search.
+        Maze generation is instantaneous; only the solver search is animated.
         """
         final_path: list[str] = []
 
-        if solver == "astar":
-            steps_it = gen.solve_astar_steps(
-                maze,
-                cfg.entry,
-                cfg.exit,
-                yield_every=yield_every,
-            )
-        else:
-            steps_it = gen.solve_bfs_steps(
+        steps_it = gen.solve_bfs_steps(
                 maze,
                 cfg.entry,
                 cfg.exit,
@@ -316,8 +313,7 @@ class AsciiRenderer:
 
         for maze, path in gen.iter_generation_steps(entry, exit):
             print("\033[H", end="", flush=True)
-            # Don't show the path during generation animation
-            # to avoid flashing the solution before solver animation
+            # Hide path during generation to avoid flashing the solution.
             self._draw_maze(maze, cfg, [])
             final_maze = maze
             final_path = path
@@ -337,13 +333,13 @@ class AsciiRenderer:
         gen: MazeGenerator,
         cfg: Config,
     ) -> None:
-        """Render maze and handle interactive commands in main event loop.
+        """Render maze and handle interactive commands.
 
         Commands:
             (r)egenerate - Create and solve new maze (instant or animated)
             (p)ath - Toggle solution path display
             (c)olor - Cycle wall color
-            (a)nimation - Toggle solver animation (BFS/A*)
+            (a)nimation - Toggle solver animation (BFS)
             (A)nimation - Toggle maze generation animation
             (g)eneration - Toggle maze generation algorithm (DFS/Prim)
             (q)uit - Exit program
@@ -354,18 +350,17 @@ class AsciiRenderer:
             gen: Maze generator engine for regeneration.
             cfg: Configuration with maze dimensions and entry/exit points.
         """
-        current_maze = maze  # Use the maze passed from a_maze_ing.py
-        current_path = path  # Solution path to display
+        current_maze = maze
+        current_path = path
 
         while True:
-            # 1. Clear terminal
-            # (\033 = esc; [2J = Clear entire screen; [H = Home)
+            # Clear terminal (\033 = esc; [2J = clear screen; [H = home)
             print("\033[2J\033[H", end="", flush=True)
 
-            # 2. Draw the maze: render walls, entry, and exit
+            # Draw the maze
             self._draw_maze(current_maze, cfg, current_path)
 
-            # 3. Handle interaction
+            # Handle interaction
             solver_status = "ON" if self.animate_solver else "OFF"
             gen_status = "ON" if self.animate_generation else "OFF"
             algo_display = self.algorithm.upper()
@@ -416,13 +411,9 @@ class AsciiRenderer:
                     # Generate instantly (no animation)
                     current_maze = gen.generate(cfg.entry, cfg.exit)
 
-                # Solve maze (animated or instant)
-                # This runs after generation, regardless of whether
-                # generation was animated or not
+                # Solve maze (animated or instant). Runs after generation.
                 if self.animate_solver and self.show_path:
-                    # Animate solver only if both animation and
-                    # path are enabled
-                    # Option A: always BFS
+                    # Animate solver
                     current_path = self._animate_solver(
                         gen,
                         cfg,
@@ -430,19 +421,9 @@ class AsciiRenderer:
                         solver="bfs",
                         yield_every=1,
                     )
-
-                    # Option B: always A*
-                    # current_path = self._animate_solver(
-                    #     gen,
-                    #     cfg,
-                    #     current_maze,
-                    #     solver="astar",
-                    #     yield_every=1,
-                    # )
                 else:
-                    # Solve instantly (no animation)
-                    # Only solve if we didn't animate generation
-                    # (which already includes the solution)
+                    # Solve instantly (no animation). Only needed if
+                    # generation was not animated.
                     if not self.animate_generation:
                         current_path = gen.solve(
                             current_maze,
