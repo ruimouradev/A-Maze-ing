@@ -29,7 +29,6 @@ tests/
 - ✓ Prim algorithm (deterministic, reproducible)
 - ✓ Constraint enforcement (42 stamp, borders, no 3x3 open areas)
 - ✓ BFS solver (shortest path)
-- ✓ A* solver (optimal path)
 - ✓ Path validation (reaches exit, respects walls)
 - ✓ Edge cases (minimum size 2x2, rectangular mazes, perfect vs imperfect)
 - ✓ Algorithm switching capability

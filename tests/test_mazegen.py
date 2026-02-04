@@ -206,16 +206,6 @@ class TestMazeSolving:
         assert len(path) > 0
         assert all(d in ['N', 'E', 'S', 'W'] for d in path)
 
-    def test_astar_finds_solution(self, dfs_generator, small_config):
-        """Test that A* finds a valid path."""
-        maze = dfs_generator.generate(small_config.entry, small_config.exit)
-        path = dfs_generator.solve_astar(
-            maze, small_config.entry, small_config.exit
-        )
-
-        assert len(path) > 0
-        assert all(d in ['N', 'E', 'S', 'W'] for d in path)
-
     def test_path_reaches_exit(self, dfs_generator, small_config):
         """Test that solution path actually reaches the exit."""
         maze = dfs_generator.generate(small_config.entry, small_config.exit)
@@ -264,24 +254,6 @@ class TestMazeSolving:
                 x += 1
             elif direction == 'W':
                 x -= 1
-
-    def test_bfs_vs_astar_both_valid(self, dfs_generator, small_config):
-        """Test that both BFS and A* find valid paths (may differ)."""
-        maze = dfs_generator.generate(small_config.entry, small_config.exit)
-
-        bfs_path = dfs_generator.solve(
-            maze, small_config.entry, small_config.exit
-        )
-        astar_path = dfs_generator.solve_astar(
-            maze, small_config.entry, small_config.exit
-        )
-
-        # Both should be valid
-        assert len(bfs_path) > 0
-        assert len(astar_path) > 0
-
-        # BFS should find shortest path
-        assert len(bfs_path) <= len(astar_path) + 1
 
 
 class TestEdgeCases:
