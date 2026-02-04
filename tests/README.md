@@ -87,7 +87,6 @@ The test suite covers:
 - ✓ Prim algorithm (deterministic, reproducible)
 - ✓ Constraint enforcement (42 stamp, borders, no 3x3 open areas)
 - ✓ BFS solver (shortest path)
-- ✓ A* solver (optimal path)
 - ✓ Path validation (reaches exit, respects walls)
 - ✓ Edge cases (minimum size, rectangular, perfect vs imperfect)
 - ✓ Algorithm switching

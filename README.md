@@ -25,8 +25,8 @@ The system supports multiple maze generation algorithms, deterministic maze solv
 # Install dependencies
 make install
 
-# Verify installation
-make test
+# Verify installation (run the test suite)
+python3 -m pytest tests/ -q
 ```
 
 ### Execution
@@ -39,10 +39,10 @@ make run
 python3 a_maze_ing.py config.txt
 
 # Run tests
-make test
+python3 -m pytest tests/ -v
 
 # Run tests with coverage
-make coverage
+python3 -m pytest tests/ --cov=. --cov-report=html
 
 # Run linting checks (mypy + flake8)
 make lint
@@ -66,7 +66,7 @@ SEED=42                     # Random seed (default: 42; use empty/None to disabl
 ALGORITHM=dfs               # Generation algorithm: dfs|prim|kruskal|wilson
 DISPLAY=ascii               # Display mode: ascii
 ANIMATE=False               # Legacy toggle (applies to both solver & generator)
-ANIMATE_SOLVER=False        # Animate solver (BFS/A*) steps
+ANIMATE_SOLVER=False        # Animate solver (BFS) steps
 ANIMATE_GENERATION=False    # Animate generation steps
 STEP_DELAY_MS=25            # Milliseconds per animation frame (>= 0)
 DENSITY=0.06                # Imperfect maze density [0.0-1.0]
@@ -147,16 +147,12 @@ After generation, mazes are validated and enhanced with:
 
 ## Solving Algorithms
 
-The system includes two pathfinding solvers:
+The system uses BFS (Breadth-First Search) for pathfinding:
 
 ### BFS (Breadth-First Search)
 - Guaranteed shortest path
 - Explores level-by-level
 - Default solver for visualization
-
-### A* Search
-- Uses Manhattan heuristic for faster convergence
-- Excellent for large mazes
 - Animatable with step-by-step frontier visualization
 
 ---
@@ -177,7 +173,7 @@ path = gen.solve(maze, entry=(0,0), exit=(19,19))
 **Reusable Components:**
 - Algorithm switching: `gen.set_algorithm("prim")` → regenerate with different algorithm
 - Step-by-step generation: `gen.iter_generation_steps(entry, exit)` → yields intermediate mazes for animation
-- Step-by-step solving: `gen.solve_bfs_steps()` / `gen.solve_astar_steps()` → yields solver frontier for visualization
+- Step-by-step solving: `gen.solve_bfs_steps()` → yields solver frontier for visualization
 - Constraint validation: Built-in 42 stamp, border, and connectivity checks
 
 **Future Extensibility:**
@@ -237,9 +233,8 @@ renderer.run(maze, path, gen, cfg)
 
 | Member | Login | Role | Responsibilities |
 |--------|-------|------|------------------|
-| Alex | ajcrod17 | **Configuration & Serialization** | Config parsing, validation, file I/O, output encoding |
-| Rui | ruimouradev | **Maze Engine & Solving** | Algorithm implementation, constraint enforcement, pathfinding |
-| Companion | voidhexen | **Integration & Testing** | System integration, test suite development, quality assurance |
+| Alex | ajcrod17 | **Configuration, Serialization & Visualization** | Config parsing, validation, file I/O, output encoding, ASCII renderer, integration & testing |
+| Rui | ruimouradev | **Maze Engine & Solving** | Algorithm implementation, constraint enforcement, pathfinding, integration & testing |
 
 ### Project Evolution
 
@@ -252,10 +247,10 @@ renderer.run(maze, path, gen, cfg)
 
 #### What Actually Happened
 1. **Phase 1-2**: Completed on schedule with clean algorithm implementation
-2. **Phase 3**: Config parser required iteration on boolean parsing and tuple handling; added monkeypatch testing for edge cases
+2. **Phase 3**: Config parser required iteration on boolean parsing and tuple handling; added testing for edge cases
 3. **Phase 4**: ASCII renderer evolved significantly—added multi-color support, junction rendering, and animation infrastructure
 4. **Phase 5**: Algorithm switching and animation completed; step-by-step solvers added for visualization
-5. **Integration Phase**: Colleague's mazegen implementation pulled in; required type annotation fixes and API verification
+5. **Integration Phase**: mazegen implementation pulled in; required type annotation, docstring fixes and API verification
 
 #### Challenges & Solutions
 
@@ -266,6 +261,7 @@ renderer.run(maze, path, gen, cfg)
 | Config prompts blocking tests | Implemented monkeypatch mocking for user input | ✅ 52 passing tests (0 skipped) |
 | 42 stamp size assumptions | Created `large_config` fixture with 20×20 mazes | ✅ Stamp tests now pass |
 | Algorithm integration | Used `set_algorithm()` method; tested with both DFS and Prim | ✅ Runtime algorithm switching works |
+| Rendering thin walls in ASCII | Implemented 2× resolution grid with Unicode box-drawing characters | ✅ Clean visual output with proper wall junctions |
 
 ### What Worked Well
 
@@ -323,9 +319,8 @@ renderer.run(maze, path, gen, cfg)
 - **Toggle Visibility**: Hide/show path with `p` command
 - **Direction Encoding**: Path stored as direction sequence (N/S/E/W)
 
-### 5. Solver Selection
+### 5. Path Solving
 - **BFS (Default)**: Guaranteed shortest path; good for animation
-- **A* Search**: Manhattan heuristic optimization; ideal for large mazes
 - **Step-by-Step Visualization**: Watch visited/frontier cells expand during solving
 
 ### 6. Constraint Features
@@ -348,9 +343,6 @@ python3 -m pytest tests/test_mazegen.py::TestMazeGeneration -v
 
 # With coverage report
 python3 -m pytest tests/ --cov=. --cov-report=html
-
-# Run only passing tests (filter skipped)
-python3 -m pytest tests/ -v --ignore-glob="*skip*"
 ```
 
 **Test Coverage:**
@@ -372,8 +364,6 @@ python3 -m pytest tests/ -v --ignore-glob="*skip*"
 
 ### Pathfinding Algorithms
 - [Breadth-First Search (BFS)](https://en.wikipedia.org/wiki/Breadth-first_search)
-- [A* Search Algorithm](https://en.wikipedia.org/wiki/A*_search_algorithm)
-- [Manhattan Distance Heuristic](https://en.wikipedia.org/wiki/Taxicab_geometry)
 
 ### 42 Curriculum Resources
 - [42 School](https://42.fr)
@@ -392,26 +382,25 @@ python3 -m pytest tests/ -v --ignore-glob="*skip*"
 
 ### AI Usage
 
-**GitHub Copilot** was used for the following tasks and components:
+**AI** was used for the following tasks and components:
 
 1. **Type Annotation Assistance** (Lines 41-64, renderer_ascii.py):
-   - Generated type hints for `__init__` method parameters
+   - Reviewed type hints for `__init__` method parameters
    - Verified correctness with mypy strict mode
    - Ensured consistency across method signatures
 
-2. **Comment Relocation for PEP 8 Compliance** (Lines 47-50, renderer_ascii.py):
+2. **Comment Relocation for PEP 8 Compliance**:
    - Suggested moving inline comments above lines to comply with 79-character limit
    - Fixed flake8 E501 violations
 
 3. **Test Suite Development** (test_config.py):
-   - Generated test fixtures and helper functions
+   - Generated test fixtures
    - Created monkeypatch-based input mocking for automated testing
-   - Developed comprehensive test cases for edge cases (boolean parsing, coordinate validation, etc.)
+   - Added comprehensive test cases for edge cases
 
 4. **Documentation & Comments**:
-   - Assisted with docstring generation
+   - Assisted with docstring reviews
    - Helped structure README sections
-   - Generated clear error messages for user-facing functions
 
 5. **Code Review**:
    - Verified type safety with mypy output
@@ -419,7 +408,7 @@ python3 -m pytest tests/ -v --ignore-glob="*skip*"
    - Identified reusable code patterns
 
 **Not AI-Generated (Human Development):**
-- Core algorithm implementations (DFS, Prim, BFS, A*)
+- Core algorithm implementations (DFS, Prim, BFS)
 - Constraint enforcement logic (42 stamp, border validation)
 - ASCII rendering and visual design
 - Project architecture and module structure
@@ -436,9 +425,8 @@ This project is part of the 42 curriculum and follows 42 School guidelines.
 ## Contact & Support
 
 For questions or issues regarding this project:
-- Alex (ajcrod17): Configuration & serialization questions
-- Rui (ruimouradev): Algorithm and maze generation questions
-- Companion (voidhexen): Testing and integration support
+- Alex (ajcrod17): Configuration, serialization, renderer, testing and integration questions
+- Rui (ruimouradev): Algorithm, maze generation, testing and integration questions
 
 ---
 
