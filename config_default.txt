@@ -13,5 +13,5 @@ DISPLAY=ascii         # ascii (recommended)
 ANIMATE=False         # legacy toggle (applies to both solver & generator)
 ANIMATE_SOLVER=False  # animate solver pathfinding steps
 ANIMATE_GENERATION=False  # animate maze generation steps
-STEP_DELAY_MS=25      # for animation (ms per frame)
+STEP_DELAY_MS=25      # animation delay (ms per frame)
 DENSITY=0.06          # float between 0.0 and 1.0

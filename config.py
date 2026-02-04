@@ -15,11 +15,14 @@
 #   5) Raise clear ValueError messages
 #
 # BONUS:
-#   - SEED (int)
+#   - SEED (int | None)
 #   - ALGORITHM (str): dfs|prim|kruskal|wilson
 #   - DISPLAY (str): ascii
-#   - ANIMATE (bool)
+#   - ANIMATE (bool) legacy toggle
+#   - ANIMATE_SOLVER (bool)
+#   - ANIMATE_GENERATION (bool)
 #   - STEP_DELAY_MS (int)
+#   - DENSITY (float)
 
 from __future__ import annotations
 
@@ -31,8 +34,8 @@ from typing import Optional
 @dataclass(frozen=True)
 class Config:
     """Immutable maze configuration parsed from a KEY=VALUE file.
-    Split between Mandatory Fields and Bonus support
-    frozen=True: makes the configuration "read-only" once it is created
+
+    The dataclass is frozen to prevent runtime mutation once validated.
     """
     width: int
     height: int
@@ -52,18 +55,8 @@ class Config:
     density: float = 0.06
 
 
-# Alexandre (B) TODO: All done
-# ✓ Implement helper parsers: parse_int, parse_bool, parse_coord
-# ✓ Implement validation:
-# ✓ width/height > 0
-# ✓ entry/exit in bounds
-# ✓ entry != exit
-# ✓ output_file not empty
-# ✓ Normalize algorithm/display strings (lowercase)
-#   Implement validation for bonuses
-
 def _parse_bool(value: str) -> bool:
-    """Converts string values to boolean safely."""
+    """Convert string values to boolean safely."""
     val = value.lower()
     if val in ("true", "1", "yes", "on"):
         return True
@@ -73,7 +66,7 @@ def _parse_bool(value: str) -> bool:
 
 
 def _parse_density(value: str) -> float:
-    """Converts string value to float and validates 0.0 <= x <= 1.0."""
+    """Convert string value to float and validate 0.0 <= x <= 1.0."""
     try:
         density = float(value)
         if not (0.0 <= density <= 1.0):
@@ -86,7 +79,7 @@ def _parse_density(value: str) -> float:
 
 
 def _parse_optional_int(value: Optional[str]) -> Optional[int]:
-    """Converts string values to optional int (None if empty/None)."""
+    """Convert string values to optional int (None if empty/None)."""
     if value is None:
         return None
     text = value.strip()
@@ -99,7 +92,7 @@ def _parse_optional_int(value: Optional[str]) -> Optional[int]:
 
 
 def _parse_coord(value: str) -> tuple[int, int]:
-    """Converts 'x,y' string into a tuple of integers."""
+    """Convert an 'x,y' string into a tuple of integers."""
     try:
         parts = value.split(",")
         # if you don't get a list of 2 strings raise error
@@ -124,13 +117,13 @@ def load_config(path: str) -> Config:
         FileNotFoundError: If config file doesn't exist.
         ValueError: If file format invalid or validation fails.
     """
-    #  Path Validation: It first checks if the file exists
+    # Path validation: ensure the file exists
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
     data: dict[str, str] = {}
-    #  Read file: reads the entire content as a single string
+    # Read file: strip comments and empty lines, then parse KEY=VALUE
     for raw in p.read_text(encoding="utf-8").splitlines():
         line = raw.strip()  # after split, removes leading/trailing whitespace
         if not line or line.startswith("#"):
@@ -140,16 +133,16 @@ def load_config(path: str) -> Config:
             line = line.split("#", 1)[0].strip()
         if "=" not in line:
             raise ValueError(f"Invalid line (expected KEY=VALUE): {raw}")
-        key, value = line.split("=", 1)  # split the string by the 1st "="
-        data[key.strip().upper()] = value.strip()  # stores Key : value in dict
+        key, value = line.split("=", 1)
+        data[key.strip().upper()] = value.strip()
 
-    #  checks the dictionary against a list of required strings
+    # Check required fields
     required = ["WIDTH", "HEIGHT", "ENTRY", "EXIT", "OUTPUT_FILE", "PERFECT"]
     missing = [k for k in required if k not in data]  # list of missing keys
     if missing:
         raise ValueError(f"Missing mandatory keys: {', '.join(missing)}")
 
-    # Conversion and Basic Validation
+    # Conversion and basic validation
     try:
         width = int(data["WIDTH"])
         height = int(data["HEIGHT"])
@@ -165,22 +158,18 @@ def load_config(path: str) -> Config:
             if response.lower() != 'y':
                 raise ValueError("Maze too small for 42 pattern")
 
-        # convert entry/exit coordinates from str to int
+        # Convert entry/exit coordinates from str to int
         entry = _parse_coord(data["ENTRY"])
         exit_coord = _parse_coord(data["EXIT"])
 
-        # Maze Requirement: Entry/Exit inside bounds
-        # List of Tuples: The code creates a temporary list containing two
-        # items. Each item is a tuple: ("ENTRY", entry) and
-        # ("EXIT", exit_coord).
+        # Maze requirement: entry/exit inside bounds
         for name, (x, y) in [("ENTRY", entry), ("EXIT", exit_coord)]:
-            #  The for loop iterates the entry and then the exit coordinates
             if not (0 <= x < width and 0 <= y < height):
                 raise ValueError(
                     f"{name} {x, y} is outside maze bounds ({width}x{height})."
                 )
 
-        # Maze Requirement: Entry and exit must be different
+        # Maze requirement: entry and exit must be different
         if entry == exit_coord:
             raise ValueError("ENTRY and EXIT coordinates must be different.")
 
@@ -231,7 +220,7 @@ def load_config(path: str) -> Config:
             output_file=data["OUTPUT_FILE"],
             perfect=_parse_bool(data["PERFECT"]),
 
-            # Optional Bonus parsed
+            # Optional bonus parsed
             seed=seed,
             algorithm=algorithm,
             display=display,
