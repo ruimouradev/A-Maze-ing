@@ -3,17 +3,16 @@
 # A-Maze-ing: Procedural Maze Generation and Solving
 
 ## Description
-
-**A-Maze-ing** is a comprehensive maze generation and solving system developed as part of the 42 curriculum. The project explores procedural generation algorithms, constraint satisfaction, and interactive visualization of maze generation and solving processes.
-
-The system supports multiple maze generation algorithms, deterministic maze solving with path visualization, and real-time ASCII animation with interactive controls. A unique feature is the mandatory "42 stamp"—a pattern embedding the number 42 into sufficiently large mazes as an Easter egg and constraint validation mechanism.
+**A-Maze-ing** is a maze generation and solving system developed as part of the
+42 curriculum. The project focuses on procedural maze generation, constraint
+enforcement (including the mandatory "42 stamp"), shortest-path solving, and
+interactive ASCII visualization.
 
 ### Goals
-- Implement procedural maze generation using multiple algorithms
-- Solve generated mazes using pathfinding algorithms
-- Provide interactive visualization and animation capabilities
-- Enforce maze constraints (borders, connectivity, decorative stamps)
-- Create a modular, extensible architecture supporting future algorithms
+- Generate mazes using procedural algorithms
+- Solve mazes using shortest-path algorithms
+- Enforce constraints (borders, connectivity, 42 stamp)
+- Provide an interactive ASCII visualization
 
 ---
 
@@ -63,7 +62,7 @@ PERFECT=True                # True for perfect maze (no loops), False for imperf
 
 # Bonus fields (optional, have sensible defaults)
 SEED=42                     # Random seed (default: 42; use empty/None to disable)
-ALGORITHM=dfs               # Generation algorithm: dfs|prim|kruskal|wilson
+ALGORITHM=dfs               # Generation algorithm: dfs|prim
 DISPLAY=ascii               # Display mode: ascii
 ANIMATE=False               # Legacy toggle (applies to both solver & generator)
 ANIMATE_SOLVER=False        # Animate solver (BFS) steps
@@ -103,8 +102,6 @@ Once the maze is displayed, the following commands are available:
 | `A` | Toggle maze generation animation (step-by-step generation display) |
 | `g` | Toggle between DFS and Prim generation algorithms |
 | `q` | Quit the program |
-
-Config equivalents: set `ANIMATE_SOLVER` and `ANIMATE_GENERATION` in the config file to control the initial state of `a`/`A` before runtime toggles.
 
 ---
 
@@ -158,6 +155,14 @@ The system uses BFS (Breadth-First Search) for pathfinding:
 ---
 
 ## Reusable Code Architecture
+
+The reusable component required by Chapter VI is the standalone Python module
+`mazegen.py`, which is packaged as `mazegen-1.0.0.tar.gz` and located at the
+root of the repository. This module can be installed independently via pip:
+
+```bash
+pip install ./mazegen-1.0.0.tar.gz
+```
 
 ### Core Modules
 
@@ -233,8 +238,8 @@ renderer.run(maze, path, gen, cfg)
 
 | Member | Login | Role | Responsibilities |
 |--------|-------|------|------------------|
-| Alex | ajcrod17 | **Configuration, Serialization & Visualization** | Config parsing, validation, file I/O, output encoding, ASCII renderer, integration & testing |
-| Rui | ruimouradev | **Maze Engine & Solving** | Algorithm implementation, constraint enforcement, pathfinding, integration & testing |
+| Alex | acaldeir | **Configuration, Serialization & Visualization** | Config parsing, validation, file I/O, output encoding, ASCII renderer, integration & testing |
+| Rui | rusilva- | **Maze Engine & Solving** | Algorithm implementation, constraint enforcement, pathfinding, integration & testing |
 
 ### Project Evolution
 
@@ -252,17 +257,6 @@ renderer.run(maze, path, gen, cfg)
 4. **Phase 5**: Algorithm switching and animation completed; step-by-step solvers added for visualization
 5. **Integration Phase**: mazegen implementation pulled in; required type annotation, docstring fixes and API verification
 
-#### Challenges & Solutions
-
-| Challenge | Solution | Outcome |
-|-----------|----------|---------|
-| Type checking errors (mypy strict mode) | Added explicit type hints to all functions | ✅ Full type safety achieved |
-| Line-length violations (flake8) | Relocated inline comments above lines | ✅ PEP 8 compliance |
-| Config prompts blocking tests | Implemented monkeypatch mocking for user input | ✅ 52 passing tests (0 skipped) |
-| 42 stamp size assumptions | Created `large_config` fixture with 20×20 mazes | ✅ Stamp tests now pass |
-| Algorithm integration | Used `set_algorithm()` method; tested with both DFS and Prim | ✅ Runtime algorithm switching works |
-| Rendering thin walls in ASCII | Implemented 2× resolution grid with Unicode box-drawing characters | ✅ Clean visual output with proper wall junctions |
-
 ### What Worked Well
 
 ✅ **Modular Architecture**: Clean separation of concerns (generation, solving, rendering, config)
@@ -276,7 +270,6 @@ renderer.run(maze, path, gen, cfg)
 
 ⚠️ **Configuration Validation**: Could add schema validation framework (e.g., Pydantic) for more robust parsing
 ⚠️ **Performance**: Large mazes (>100×100) could benefit from parallel constraint checking
-⚠️ **Algorithm Coverage**: Kruskal's and Wilson's algorithms mentioned but not fully implemented
 ⚠️ **Display Formats**: Only ASCII currently supported; JSON/image export would be valuable
 ⚠️ **Documentation**: Algorithm complexity analysis and performance benchmarks would help users choose between DFS/Prim
 ⚠️ **GUI Alternative**: Terminal UI is functional but a graphical interface would improve accessibility
@@ -346,7 +339,7 @@ python3 -m pytest tests/ --cov=. --cov-report=html
 ```
 
 **Test Coverage:**
-- ✅ 52 tests passing, 0 skipped
+- 52 tests passing, 0 skipped
 - Configuration parsing (18 tests)
 - Maze generation & constraints (24 tests)  
 - Pathfinding & solving (12 tests)
@@ -365,10 +358,6 @@ python3 -m pytest tests/ --cov=. --cov-report=html
 ### Pathfinding Algorithms
 - [Breadth-First Search (BFS)](https://en.wikipedia.org/wiki/Breadth-first_search)
 
-### 42 Curriculum Resources
-- [42 School](https://42.fr)
-- [42 Projects Guide](https://github.com/42School)
-
 ### Technical Documentation
 - [Python Type Hints (PEP 484)](https://www.python.org/dev/peps/pep-0484/)
 - [Python Dataclasses](https://docs.python.org/3/library/dataclasses.html)
@@ -384,51 +373,12 @@ python3 -m pytest tests/ --cov=. --cov-report=html
 
 **AI** was used for the following tasks and components:
 
-1. **Type Annotation Assistance** (Lines 41-64, renderer_ascii.py):
-   - Reviewed type hints for `__init__` method parameters
-   - Verified correctness with mypy strict mode
-   - Ensured consistency across method signatures
+   - Documentation and README structuring
+   - Code style and readability improvements (e.g. PEP 8 compliance)
+   - Reviewing type annotations and static analysis feedback
+   - Suggesting testing strategies and edge-case coverage.
+   - Gaining a deeper understanding of concepts and examples.
 
-2. **Comment Relocation for PEP 8 Compliance**:
-   - Suggested moving inline comments above lines to comply with 79-character limit
-   - Fixed flake8 E501 violations
-
-3. **Test Suite Development** (test_config.py):
-   - Generated test fixtures
-   - Created monkeypatch-based input mocking for automated testing
-   - Added comprehensive test cases for edge cases
-
-4. **Documentation & Comments**:
-   - Assisted with docstring reviews
-   - Helped structure README sections
-
-5. **Code Review**:
-   - Verified type safety with mypy output
-   - Checked linting compliance with flake8
-   - Identified reusable code patterns
-
-**Not AI-Generated (Human Development):**
-- Core algorithm implementations (DFS, Prim, BFS)
-- Constraint enforcement logic (42 stamp, border validation)
-- ASCII rendering and visual design
-- Project architecture and module structure
-- Configuration parsing and validation logic
-
----
-
-## License
-
-This project is part of the 42 curriculum and follows 42 School guidelines.
-
----
-
-## Contact & Support
-
-For questions or issues regarding this project:
-- Alex (ajcrod17): Configuration, serialization, renderer, testing and integration questions
-- Rui (ruimouradev): Algorithm, maze generation, testing and integration questions
-
----
-
-**Last Updated:** February 2026  
-**Status:** ✅ Complete - All 52 tests passing, all mandatory features implemented, bonus features included
+All core project logic — maze generation algorithms, constraint enforcement
+(including the 42 stamp), pathfinding, rendering logic, and overall architecture —
+was designed, implemented, and validated by the team.
