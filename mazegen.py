@@ -1,18 +1,47 @@
-"""A-Maze-ing — Core maze engine (group project)
+"""
+A-Maze-ing — reusable maze generator module
 
-This module contains the reusable maze engine:
-- Maze data model (grid + walls bitmask)
-- Generation algorithms (DFS baseline, Prim bonus)
-- Constraint enforcement ("42" stamp, borders, no 3x3 open areas)
-- Solvers (BFS shortest path, A* bonus)
+Standalone, reusable module:
+- Maze data model (walls bitmask)
+- Generation algorithms + constraints
+- Solver (shortest path)
 
-Design rules:
+Rules:
 - No printing
 - No file I/O
 - No user interaction
 
-The goal is to keep this file self-contained and side-effect free so it can be
-imported and reused in future projects.
+Basic usage
+-----------
+from mazegen import MazeGenerator
+
+gen = MazeGenerator(width=31, height=21, seed=42,
+                    perfect=True, algorithm="dfs")
+entry = (1, 1)
+exit_ = (29, 19)
+
+maze = gen.generate(entry=entry, exit=exit_)
+path = gen.solve(maze=maze, entry=entry, exit=exit_)
+
+Parameters
+----------
+- width, height: maze dimensions (int)
+- seed: int or None (None => random)
+- perfect: bool (True => perfect maze; False => may create loops)
+- algorithm: "dfs" or "prim" (if implemented)
+- density: float (used when perfect=False)
+
+Accessing the structure
+-----------------------
+- maze.width, maze.height
+- maze.cells[y][x]: int bitmask in 0..15
+  Bits: N=1, E=2, S=4, W=8 (bit set => wall is CLOSED)
+- "42" stamp: maze.omitted_42 and maze.stamp42 (if present)
+
+Packaging note
+--------------
+This file must be packagable as `mazegen-*` (.whl or .tar.gz) and installable
+via pip.
 """
 
 # Enable forward type annotations (Python typing feature)
@@ -23,9 +52,6 @@ from typing import Optional, Iterator
 
 # Efficient FIFO queue used by BFS
 from collections import deque
-
-# Priority queue used by A* (heap-based)
-import heapq
 
 # Deterministic random generator (seed support)
 import random
@@ -653,78 +679,7 @@ class MazeGenerator:
         return path
 
     # ============================================================
-    # STEP 8 — SOLVER A* (BONUS: 2nd solver)
-    #
-    # Source (A*):
-    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
-    # ============================================================
-
-    def solve_astar(
-        self,
-        maze: Maze,
-        entry: tuple[int, int],
-        exit: tuple[int, int],
-    ) -> list[str]:
-        """
-        Return a path using A* (Manhattan heuristic) as list
-        of moves like ['N','E',...].
-        """
-
-        def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-        # heap item: (fscore, gscore, node)
-        open_heap: list[tuple[int, int, tuple[int, int]]] = []
-        gscore: dict[tuple[int, int], int] = {entry: 0}
-        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
-
-        heapq.heappush(open_heap, (manhattan(entry, exit), 0, entry))
-        closed: set[tuple[int, int]] = set()
-
-        while open_heap:
-            _f, g, (x, y) = heapq.heappop(open_heap)
-
-            if (x, y) in closed:
-                continue
-            closed.add((x, y))
-
-            if (x, y) == exit:
-                break
-
-            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                if not self._can_move(maze, x, y, d):
-                    continue
-
-                nx = x + dx
-                ny = y + dy
-                nxt = (nx, ny)
-
-                tentative_g = g + 1
-                if nxt in gscore and tentative_g >= gscore[nxt]:
-                    continue
-
-                gscore[nxt] = tentative_g
-                prev[nxt] = ((x, y), d)
-
-                fscore = tentative_g + manhattan(nxt, exit)
-                heapq.heappush(open_heap, (fscore, tentative_g, nxt))
-
-        # If no path found
-        if entry != exit and exit not in prev:
-            return []
-
-        # Reconstruct path
-        path: list[str] = []
-        cur = exit
-        while cur != entry:
-            (px, py), d = prev[cur]
-            path.append(d)
-            cur = (px, py)
-        path.reverse()
-        return path
-
-    # ============================================================
-    # Solver step-by-step animation support (BFS / A*)
+    # Solver step-by-step animation support (BFS)
     #
     # Frame format:
     #   (current, visited, frontier, path_so_far)
@@ -818,89 +773,6 @@ class MazeGenerator:
         # Final frame (path is available now)
         yield (exit, set(visited), set(q), final_path)
 
-    def solve_astar_steps(
-        self,
-        maze: Maze,
-        entry: tuple[int, int],
-        exit: tuple[int, int],
-        yield_every: int = 1,
-    ) -> Iterator[
-        tuple[
-            tuple[int, int],
-            set[tuple[int, int]],
-            set[tuple[int, int]],
-            list[str],
-        ]
-    ]:
-        """
-        A* solver that yields intermediate states for animation.
-
-        The frontier set is the current open-set (nodes in the heap).
-        """
-
-        def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-        open_heap: list[tuple[int, int, tuple[int, int]]] = []
-        open_set: set[tuple[int, int]] = set()
-        closed: set[tuple[int, int]] = set()
-
-        gscore: dict[tuple[int, int], int] = {entry: 0}
-        prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
-
-        heapq.heappush(open_heap, (manhattan(entry, exit), 0, entry))
-        open_set.add(entry)
-
-        steps = 0
-
-        # Initial frame
-        yield (entry, set(closed), set(open_set), [])
-
-        while open_heap:
-            _f, g, cur = heapq.heappop(open_heap)
-
-            if cur in closed:
-                continue
-
-            open_set.discard(cur)
-            closed.add(cur)
-
-            if cur == exit:
-                break
-
-            cx, cy = cur
-
-            for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
-                if not self._can_move(maze, cx, cy, d):
-                    continue
-
-                nx = cx + dx
-                ny = cy + dy
-                nxt = (nx, ny)
-
-                if nxt in closed:
-                    continue
-
-                tentative_g = g + 1
-                if nxt in gscore and tentative_g >= gscore[nxt]:
-                    continue
-
-                gscore[nxt] = tentative_g
-                prev[nxt] = (cur, d)
-
-                fscore = tentative_g + manhattan(nxt, exit)
-                heapq.heappush(open_heap, (fscore, tentative_g, nxt))
-                open_set.add(nxt)
-
-            steps += 1
-            if yield_every > 0 and (steps % yield_every) == 0:
-                yield (cur, set(closed), set(open_set), [])
-
-        final_path = self._reconstruct_path(prev, entry, exit)
-
-        # Final frame
-        yield (exit, set(closed), set(open_set), final_path)
-
     def solve_steps(
         self,
         maze: Maze,
@@ -921,16 +793,9 @@ class MazeGenerator:
 
         solver:
           - 'bfs'  (mandatory)
-          - 'astar' (bonus)
         """
-        s = solver.lower().strip()
-        if s in ("astar", "a*"):
-            return self.solve_astar_steps(
-                maze, entry, exit, yield_every=yield_every
-            )
-        return self.solve_bfs_steps(
-            maze, entry, exit, yield_every=yield_every
-        )
+        _ = solver
+        return self.solve_bfs_steps(maze, entry, exit, yield_every=yield_every)
 
     # ============================================================
     # STEP 9 — ANIMATION: generation steps (BONUS)
