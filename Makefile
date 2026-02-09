@@ -1,12 +1,3 @@
-# ============================================================
-# File: Makefile
-#
-# OWNER:
-#   Alexandre (Person B)
-#
-# ROLE:
-#   Developer commands: install/run/debug/lint/clean
-# ============================================================
 
 PY=python3
 PIP=pip3
