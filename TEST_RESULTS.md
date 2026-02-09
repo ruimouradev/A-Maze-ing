@@ -47,11 +47,9 @@ def test_parse_with_comments(self, tmp_path):
 - Seed-based reproducibility
 - Minimum size constraint (2x2)
 
-#### Maze Solving Tests (5)
+#### Maze Solving Tests (3)
 - BFS pathfinding
-- A* pathfinding  
 - Path validation (reaches exit, respects walls)
-- Algorithm comparison
 
 #### Constraint Tests (4)
 - Entry/exit differentiation

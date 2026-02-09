@@ -5,7 +5,7 @@
 #   Alexandre
 #
 # ROLE:
-#   Write maze to output file in exact required format.
+#   Serialize maze output in the exact subject format.
 #
 # ALEXANDRE MUST:
 #   1) Convert wall masks (0..15) to ONE hex digit per cell
@@ -16,8 +16,7 @@
 #   6) Write solution path as a string like 'NNEESW'
 #
 # BONUS:
-#   -You can optionally include extra debug info ONLY if the subject allows.
-#     (Default: do not add anything extra.)
+#   - Optional debug info only if the subject allows (default: none).
 
 from __future__ import annotations
 from mazegen import Maze
@@ -25,7 +24,7 @@ from mazegen import Maze
 
 def write_output_file(
     output_path: str,
-    maze: Maze,  # Assuming maze.grid contains the wall bitmasks (0-15)
+    maze: Maze,
     entry: tuple[int, int],
     exit: tuple[int, int],
     path: list[str],
@@ -51,27 +50,21 @@ def write_output_file(
     """
     try:
         with open(output_path, 'w', encoding="utf-8") as f:
-            # 1. Write the Hex Grid
-            # One hex digit per cell, one line per row
+            # 1) Write the hex grid: one hex digit per cell, one row per line
             for row in maze.cells:
-                # generator loops through each cell value in the current row
-                # {cell:X} converts int to a single '0'-'F' uppercase character
                 hex_line = "".join(f"{cell:X}" for cell in row)
-                # writes directly to the file object f
                 f.write(hex_line + "\n")
 
-            # 2. Write the mandatory blank line
+            # 2) Write the mandatory blank line
             f.write("\n")
 
-            # 3. Write Entry point as x,y
-            # Ensure x is col and y is row if that's your internal logic
+            # 3) Write entry point as x,y
             f.write(f"{entry[0]},{entry[1]}\n")
 
-            # 4. Write Exit point as x,y
+            # 4) Write exit point as x,y
             f.write(f"{exit[0]},{exit[1]}\n")
 
-            # 5. Write Shortest Path string
-            # 'path' should be a list like ['N', 'E', 'E', 'S']
+            # 5) Write shortest path string
             f.write("".join(path) + "\n")
 
     except (IOError, OSError) as e:
