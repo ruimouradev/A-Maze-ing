@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add parent directory to path so tests can import project modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mazegen import MazeGenerator, Maze
-from config import Config
+from config import Config  # noqa: E402
+from mazegen import MazeGenerator, Maze  # noqa: E402
 
 
 @pytest.fixture
@@ -39,6 +40,21 @@ def medium_config() -> Config:
         output_file="test_output.txt",
         perfect=True,
         seed=123,
+        algorithm="dfs",
+    )
+
+
+@pytest.fixture
+def large_config() -> Config:
+    """Create a large maze configuration for testing (stamp-safe: ≥11x9)."""
+    return Config(
+        width=20,
+        height=20,
+        entry=(0, 0),
+        exit=(19, 19),
+        output_file="test_output.txt",
+        perfect=True,
+        seed=456,
         algorithm="dfs",
     )
 

@@ -15,11 +15,14 @@
 #   5) Raise clear ValueError messages
 #
 # BONUS:
-#   - SEED (int)
+#   - SEED (int | None)
 #   - ALGORITHM (str): dfs|prim|kruskal|wilson
 #   - DISPLAY (str): ascii
-#   - ANIMATE (bool)
+#   - ANIMATE (bool) legacy toggle
+#   - ANIMATE_SOLVER (bool)
+#   - ANIMATE_GENERATION (bool)
 #   - STEP_DELAY_MS (int)
+#   - DENSITY (float)
 # ============================================================
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ from typing import Optional
 @dataclass(frozen=True)
 class Config:
     """Immutable maze configuration parsed from a KEY=VALUE file.
-    Split between Mandatory Fields and Bonus support
-    frozen=True: makes the configuration "read-only" once it is created
+
+    The dataclass is frozen to prevent runtime mutation once validated.
     """
     width: int
     height: int
@@ -47,22 +50,14 @@ class Config:
     algorithm: str = "dfs"
     display: str = "ascii"
     animate: bool = False
+    animate_solver: bool = False
+    animate_generation: bool = False
     step_delay_ms: int = 25
     density: float = 0.06
 
 
-# Alexandre (B) TODO: All done
-# ✓ Implement helper parsers: parse_int, parse_bool, parse_coord
-# ✓ Implement validation:
-# ✓ width/height > 0
-# ✓ entry/exit in bounds
-# ✓ entry != exit
-# ✓ output_file not empty
-# ✓ Normalize algorithm/display strings (lowercase)
-#   Implement validation for bonuses
-
 def _parse_bool(value: str) -> bool:
-    """Converts string values to boolean safely."""
+    """Convert string values to boolean safely."""
     val = value.lower()
     if val in ("true", "1", "yes", "on"):
         return True
@@ -72,7 +67,7 @@ def _parse_bool(value: str) -> bool:
 
 
 def _parse_density(value: str) -> float:
-    """Converts string value to float and validates 0.0 <= x <= 1.0."""
+    """Convert string value to float and validate 0.0 <= x <= 1.0."""
     try:
         density = float(value)
         if not (0.0 <= density <= 1.0):
@@ -84,8 +79,21 @@ def _parse_density(value: str) -> float:
         raise ValueError(msg)
 
 
+def _parse_optional_int(value: Optional[str]) -> Optional[int]:
+    """Convert string values to optional int (None if empty/None)."""
+    if value is None:
+        return None
+    text = value.strip()
+    if not text or text.lower() == "none":
+        return None
+    try:
+        return int(text)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid integer value: {value}")
+
+
 def _parse_coord(value: str) -> tuple[int, int]:
-    """Converts 'x,y' string into a tuple of integers."""
+    """Convert an 'x,y' string into a tuple of integers."""
     try:
         parts = value.split(",")
         # if you don't get a list of 2 strings raise error
@@ -110,13 +118,13 @@ def load_config(path: str) -> Config:
         FileNotFoundError: If config file doesn't exist.
         ValueError: If file format invalid or validation fails.
     """
-    #  Path Validation: It first checks if the file exists
+    # Path validation: ensure the file exists
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
     data: dict[str, str] = {}
-    #  Read file: reads the entire content as a single string
+    # Read file: strip comments and empty lines, then parse KEY=VALUE
     for raw in p.read_text(encoding="utf-8").splitlines():
         line = raw.strip()  # after split, removes leading/trailing whitespace
         if not line or line.startswith("#"):
@@ -126,16 +134,16 @@ def load_config(path: str) -> Config:
             line = line.split("#", 1)[0].strip()
         if "=" not in line:
             raise ValueError(f"Invalid line (expected KEY=VALUE): {raw}")
-        key, value = line.split("=", 1)  # split the string by the 1st "="
-        data[key.strip().upper()] = value.strip()  # stores Key : value in dict
+        key, value = line.split("=", 1)
+        data[key.strip().upper()] = value.strip()
 
-    #  checks the dictionary against a list of required strings
+    # Check required fields
     required = ["WIDTH", "HEIGHT", "ENTRY", "EXIT", "OUTPUT_FILE", "PERFECT"]
     missing = [k for k in required if k not in data]  # list of missing keys
     if missing:
         raise ValueError(f"Missing mandatory keys: {', '.join(missing)}")
 
-    # Conversion and Basic Validation
+    # Conversion and basic validation
     try:
         width = int(data["WIDTH"])
         height = int(data["HEIGHT"])
@@ -144,30 +152,25 @@ def load_config(path: str) -> Config:
 
         # Check if maze is too small for 42 stamp
         if width < 11 or height < 9:
-            print("Error: Maze too small for 42 pattern")
+            print("Warning: Maze too small for 42 pattern")
             response = input(
                 "Do you want to continue without 42 pattern? (y/n): "
             )
             if response.lower() != 'y':
-                import sys
-                sys.exit(0)
+                raise ValueError("Maze too small for 42 pattern")
 
-        # convert entry/exit coordinates from str to int
+        # Convert entry/exit coordinates from str to int
         entry = _parse_coord(data["ENTRY"])
         exit_coord = _parse_coord(data["EXIT"])
 
-        # Maze Requirement: Entry/Exit inside bounds
-        # List of Tuples: The code creates a temporary list containing two
-        # items. Each item is a tuple: ("ENTRY", entry) and
-        # ("EXIT", exit_coord).
+        # Maze requirement: entry/exit inside bounds
         for name, (x, y) in [("ENTRY", entry), ("EXIT", exit_coord)]:
-            #  The for loop iterates the entry and then the exit coordinates
             if not (0 <= x < width and 0 <= y < height):
                 raise ValueError(
                     f"{name} {x, y} is outside maze bounds ({width}x{height})."
                 )
 
-        # Maze Requirement: Entry and exit must be different
+        # Maze requirement: entry and exit must be different
         if entry == exit_coord:
             raise ValueError("ENTRY and EXIT coordinates must be different.")
 
@@ -183,6 +186,33 @@ def load_config(path: str) -> Config:
                 f"Directory for output file does not exist: {out_p.parent}"
             )
 
+        seed_raw = data.get("SEED")
+        seed = _parse_optional_int(seed_raw)
+        if seed is None and seed_raw is None:
+            seed = 42
+        algorithm = data.get("ALGORITHM", "dfs").lower()
+        allowed_algorithms = {"dfs", "prim", "kruskal", "wilson"}
+        if algorithm not in allowed_algorithms:
+            raise ValueError(
+                "ALGORITHM must be one of: dfs, prim, kruskal, wilson"
+            )
+
+        display = data.get("DISPLAY", "ascii").lower()
+        if display not in {"ascii"}:
+            raise ValueError("DISPLAY must be 'ascii'")
+
+        animate_default = _parse_bool(data.get("ANIMATE", "False"))
+        animate_solver = _parse_bool(
+            data.get("ANIMATE_SOLVER", str(animate_default))
+        )
+        animate_generation = _parse_bool(
+            data.get("ANIMATE_GENERATION", str(animate_default))
+        )
+
+        step_delay_ms = int(data.get("STEP_DELAY_MS", 25))
+        if step_delay_ms < 0:
+            raise ValueError("STEP_DELAY_MS must be >= 0")
+
         return Config(
             width=width,
             height=height,
@@ -191,13 +221,15 @@ def load_config(path: str) -> Config:
             output_file=data["OUTPUT_FILE"],
             perfect=_parse_bool(data["PERFECT"]),
 
-            # Optional Bonus parsing: errors not checked; only defaults for now
-            seed=int(data.get("SEED", 42)),
-            algorithm=data.get("ALGORITHM", "dfs").lower(),
-            display=data.get("DISPLAY", "ascii").lower(),
-            animate=_parse_bool(data.get("ANIMATE", "False")),
-            step_delay_ms=int(data.get("STEP_DELAY_MS", 25)),
-            density=_parse_density(data.get("DENSITY", "0.06"))
+            # Optional bonus parsed
+            seed=seed,
+            algorithm=algorithm,
+            display=display,
+            animate=animate_default,
+            animate_solver=animate_solver,
+            animate_generation=animate_generation,
+            step_delay_ms=step_delay_ms,
+            density=_parse_density(data.get("DENSITY", "0.06")),
         )
 
     except ValueError as e:
