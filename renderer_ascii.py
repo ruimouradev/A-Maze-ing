@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import signal
 import sys
 import time
 from config import Config
@@ -42,6 +43,10 @@ from serializer import write_output_file
 class AsciiRenderer:
     def __init__(self) -> None:
         """Initialize renderer state and UI defaults."""
+        signal.signal(signal.SIGTSTP, self._handle_suspend)
+        signal.signal(signal.SIGQUIT, self._handle_suspend)
+        signal.signal(signal.SIGHUP, self._handle_suspend)
+        signal.signal(signal.SIGTERM, self._handle_suspend)
         self.show_path: bool = True
         # Solver animation toggle
         self.animate_solver: bool = False
@@ -60,6 +65,12 @@ class AsciiRenderer:
         self.color_index: int = 0
         self.wall_color: str = self.wall_colors[0]
         self.animation_speed: float = 0.01  # seconds per frame
+
+    def _handle_suspend(
+        self, signum: int, frame: object | None
+    ) -> None:
+        """Handle suspend/termination signals by raising KeyboardInterrupt."""
+        raise KeyboardInterrupt
 
     def _draw_maze(
         self,
@@ -365,12 +376,15 @@ class AsciiRenderer:
             solver_status = "ON" if self.animate_solver else "OFF"
             gen_status = "ON" if self.animate_generation else "OFF"
             algo_display = self.algorithm.upper()
-            cmd = input(
-                f"\n(r)egenerate, (p)ath, (c)olor, "
-                f"(a)nim solver[{solver_status}], "
-                f"(A)nim gen[{gen_status}], "
-                f"(g)en algo[{algo_display}], (q)uit: "
-            )
+            try:
+                cmd = input(
+                    f"\n(r)egenerate, (p)ath, (c)olor, "
+                    f"(a)nim solver[{solver_status}], "
+                    f"(A)nim gen[{gen_status}], "
+                    f"(g)en algo[{algo_display}], (q)uit: "
+                )
+            except EOFError:
+                raise KeyboardInterrupt
 
             if cmd.lower() == 'q':
                 break
