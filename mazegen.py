@@ -53,7 +53,7 @@ from typing import Optional, Iterator
 # Efficient FIFO queue used by BFS
 from collections import deque
 
-# Deterministic random generator (seed support)
+# Deterministic random generator (allow seed)
 import random
 
 # Wall bitmask: each bit set to 1 means the corresponding wall is CLOSED.
@@ -80,11 +80,9 @@ class Maze:
         self.cells = cells
 
         # True if the maze is too small to place the mandatory "42" stamp.
-        # The caller can use this flag to print a warning.
         self.omitted_42: bool = False
 
         # This will store the coordinates of the 42 pattern.
-        # This is better than assuming "cell == 15" means it belongs to the 42.
         self.stamp42: set[tuple[int, int]] = set()
 
     def get(self, x: int, y: int) -> int:
@@ -97,7 +95,7 @@ class Maze:
 
 
 class MazeGenerator:
-    """Maze generator engine (generation + constraints + solvers)."""
+    """Maze generator engine (generation + constraints + solver)."""
     def __init__(
         self,
         width: int,
@@ -119,6 +117,7 @@ class MazeGenerator:
         # Density is used only when perfect=False (to create loops).
         self.density = density
 
+    # Allow to change the algorithm without creating an MazeGenerator
     def set_algorithm(self, algorithm: str) -> None:
         """Set the maze generation algorithm at runtime."""
         self.algorithm = algorithm.lower().strip() if algorithm else "dfs"
@@ -150,6 +149,7 @@ class MazeGenerator:
         # Open the opposite wall in the neighboring cell
         maze.set(nx, ny, maze.get(nx, ny) & ~bit_neighbor_opposite)
 
+    # Check if we can move in that direction
     def _can_move(self, maze: Maze, x: int, y: int, d: str) -> bool:
         """
         Return True if there is no closed wall in direction d from (x, y)
@@ -166,14 +166,7 @@ class MazeGenerator:
         # Wall bit = 1 means closed (cannot move); bit = 0 means open
         return (maze.get(x, y) & bit_current) == 0
 
-    #
-    # Source (bitmask):
-    #   https://www.learncpp.com/cpp-tutorial/bitmasks/
-    #
-    # Source (maze/graph):
-    #   https://en.wikipedia.org/wiki/Maze_generation_algorithm
-    # ============================================================
-
+    # Check if entry and exit values are possible (inside maze and different)
     def _validate_params(
         self,
         entry: tuple[int, int],
@@ -198,6 +191,7 @@ class MazeGenerator:
         if entry == exit:
             raise ValueError("Entry and exit must be different")
 
+    # DFS algorithm (recursive backtracker)
     def _generate_dfs(
         self,
         maze: Maze,
@@ -219,6 +213,7 @@ class MazeGenerator:
         stack.append(start)
 
         while stack:
+            # Looking for current cell = stack top
             x, y = stack[-1]
 
             unvisited_neighbors: list[tuple[int, int, str]] = []
@@ -234,7 +229,7 @@ class MazeGenerator:
                 # Candidate neighbor: in bounds and not visited yet
                 unvisited_neighbors.append((nx, ny, d))
 
-            # If none exist we pop (going back)
+            # If none exist we have to pop (going back)
             if not unvisited_neighbors:
                 stack.pop()
                 continue
@@ -246,11 +241,7 @@ class MazeGenerator:
             visited.add((nx, ny))
             stack.append((nx, ny))
 
-    #
-    # Source (DFS maze):
-    #   https://weblog.jamisbuck.org/2011/2/7/maze-generation-algorithm-recap
-    # ============================================================
-
+    # Prim algorith
     def _generate_prim(
         self,
         maze: Maze,
@@ -299,17 +290,10 @@ class MazeGenerator:
             in_tree.add((nx, ny))
             add_frontier(nx, ny)
 
-    # ============================================================
-    # STEP 5 — CONSTRAINT: "42" pattern (MANDATORY)
-    #
-    # Source (grids / offsets):
-    #   https://www.redblobgames.com/grids/intro/
-    # ============================================================
-
+    # "42" pattern
     def _get_42_coords(self, maze: Maze) -> set[tuple[int, int]]:
         """Return coordinates of a centered '42' pattern (size-aware)."""
-        # We use multiple patterns so the "42" can be smaller on small mazes.
-        # Scale can't go below 1 with integer cells, so pattern choice matters.
+        # Using multiple patterns so the "42" can be smaller on small mazes.
 
         pat_small = [
             "#.#.###",
@@ -389,7 +373,7 @@ class MazeGenerator:
         """
         Stamp the "42" into the maze by forcing some cells to be closed (15).
         """
-        # Save coords of the 42 pattern so Alexandre can color it safely
+        # Save coords of the 42 pattern so can color it safely
         maze.stamp42.clear()
         maze.stamp42.update(coords)
 
@@ -397,13 +381,7 @@ class MazeGenerator:
         for x, y in coords:
             maze.set(x, y, 15)
 
-    # ============================================================
-    # STEP 6 — CONSTRAINT: "no 3x3 open area" (MANDATORY)
-    #
-    # Source (flood fill / areas):
-    #   https://www.geeksforgeeks.org/flood-fill-algorithm/
-    # ============================================================
-
+    # Closing wall both sides
     def _close_wall(self, maze: Maze, x: int, y: int, d: str) -> None:
         """
         Close the wall in direction d from (x, y),
@@ -425,11 +403,13 @@ class MazeGenerator:
         Return True if there exists a 3x3 window that is "too open"
         according to our criterion.
         """
+        # -2 we are incrementing 2 lines in 3x3 area
         for y0 in range(0, maze.height - 2):
             for x0 in range(0, maze.width - 2):
                 all_open = True
 
                 # Check horizontal internal corridors inside the 3x3
+                # 3 lines with and connections
                 for y in range(y0, y0 + 3):
                     for x in range(x0, x0 + 2):
                         if not self._can_move(maze, x, y, "E"):
@@ -485,7 +465,7 @@ class MazeGenerator:
                 if not all_open:
                     continue
 
-                # Found a forbidden 3x3: pick a simple internal wall to close.
+                # Found a forbidden 3x3
                 # We try center->right first, else center->down,
                 # else any internal open wall.
                 cx, cy = x0 + 1, y0 + 1
@@ -511,18 +491,10 @@ class MazeGenerator:
                             self._close_wall(maze, x, y, "S")
                             return
 
-        # Nothing to fix
+        # Everything fixed on this 3x3 area
         return
 
-    # ============================================================
-    # PERFECT=False support (non-perfect maze with loops)
-    #
-    # Idea:
-    #   - Generate a perfect maze first (tree)
-    #   - Then open extra random walls to create loops
-    #   - Keep coherence and avoid the 42 blocked cells
-    # ============================================================
-
+    # Creating non-perfect maze
     def _add_loops(
         self,
         maze: Maze,
@@ -543,7 +515,7 @@ class MazeGenerator:
             return
 
         dirs = list(DIRS.keys())
-
+        # Trying to open rando
         for _ in range(attempts):
             x = self.rng.randrange(self.width)
             y = self.rng.randrange(self.height)
@@ -571,10 +543,6 @@ class MazeGenerator:
             if self._has_forbidden_3x3(maze):
                 self._close_wall(maze, x, y, d)
 
-    # -----------------------
-    # Required public API
-    # -----------------------
-
     def generate(self, entry: tuple[int, int], exit: tuple[int, int]) -> Maze:
         """Generate and return a Maze."""
         self._validate_params(entry, exit)
@@ -585,7 +553,8 @@ class MazeGenerator:
             [[15 for _ in range(self.width)] for _ in range(self.height)],
         )
 
-        # Define the 42 coords before generation so we don't break paths later.
+        # Define the 42 coords before generation.
+        # Checking if the size allows the 42 or not.
         maze.omitted_42 = False
         try:
             blocked = self._get_42_coords(maze)
@@ -598,7 +567,7 @@ class MazeGenerator:
         if exit in blocked:
             raise ValueError("Exit is inside the 42 pattern")
 
-        # STEP 3/4: dispatch by algorithm
+        # dispatch by algorithm
         if self.algorithm in ("dfs", "recursive_backtracker"):
             self._generate_dfs(maze, start=entry, blocked=blocked)
         elif self.algorithm == "prim":
@@ -610,10 +579,10 @@ class MazeGenerator:
         if not self.perfect:
             self._add_loops(maze, blocked=blocked, density=self.density)
 
-        # STEP 5: stamp (store coords + force the 42 cells to 15)
+        # stamp (store coords + force the 42 cells to 15)
         self._stamp_42(maze, blocked)
 
-        # STEP 6: keep fixing until there are no forbidden windows (safe limit)
+        # keep fixing until there are no forbidden windows (safe limit)
         for _ in range(self.width * self.height):
             if not self._has_forbidden_3x3(maze):
                 break
@@ -621,13 +590,7 @@ class MazeGenerator:
 
         return maze
 
-    # ============================================================
-    # STEP 7 — SOLVER BFS (MANDATORY: shortest path)
-    #
-    # Source (BFS on grids):
-    #   https://www.redblobgames.com/pathfinding/a-star/introduction.html
-    # ============================================================
-
+    # SOLVER BFS
     def solve(
         self,
         maze: Maze,
@@ -635,8 +598,11 @@ class MazeGenerator:
         exit: tuple[int, int],
     ) -> list[str]:
         """Return shortest path as list of moves like ['N','E',...]."""
+        # Stores the cells to be explored
         q: deque[tuple[int, int]] = deque()
+        # Set the already visited to avoid revisite
         visited: set[tuple[int, int]] = set()
+        # Mapping each cell (previous cell, direcction)
         prev: dict[tuple[int, int], tuple[tuple[int, int], str]] = {}
 
         q.append(entry)
@@ -648,10 +614,12 @@ class MazeGenerator:
             if (x, y) == exit:
                 break
 
+            # Exploring the 4 directions
             for d, (dx, dy, _bit_current, _bit_opp) in DIRS.items():
                 if not self._can_move(maze, x, y, d):
                     continue
 
+                # Calculating neighbor coordinates
                 nx = x + dx
                 ny = y + dy
                 nxt = (nx, ny)
@@ -678,17 +646,7 @@ class MazeGenerator:
         path.reverse()
         return path
 
-    # ============================================================
     # Solver step-by-step animation support (BFS)
-    #
-    # Frame format:
-    #   (current, visited, frontier, path_so_far)
-    #
-    # Notes:
-    #   - path_so_far is [] until the goal is reached
-    #   - final frame yields the final_path
-    # ============================================================
-
     def _reconstruct_path(
         self,
         prev: dict[tuple[int, int], tuple[tuple[int, int], str]],
@@ -797,13 +755,7 @@ class MazeGenerator:
         _ = solver
         return self.solve_bfs_steps(maze, entry, exit, yield_every=yield_every)
 
-    # ============================================================
-    # STEP 9 — ANIMATION: generation steps (BONUS)
-    #
-    # Yields intermediate maze states during generation so the
-    # renderer can animate the carving process.
-    # ============================================================
-
+    # Generation steps
     def _iter_dfs_generation_steps(
         self,
         maze: Maze,
