@@ -11,36 +11,34 @@ Rules:
 - No file I/O
 - No user interaction
 
-Basic usage
------------
-from mazegen import MazeGenerator
+Short documentation
+------------------------------
+1) Instantiate and use the generator (basic example):
+    from mazegen import MazeGenerator
+    gen = MazeGenerator(width=31, height=21, seed=42,
+                              perfect=True, algorithm="dfs")
+    entry = (1, 1)
+    exit_ = (29, 19)
+    maze = gen.generate(entry=entry, exit=exit_)
+    path = gen.solve(maze=maze, entry=entry, exit=exit_)
 
-gen = MazeGenerator(width=31, height=21, seed=42,
-                    perfect=True, algorithm="dfs")
-entry = (1, 1)
-exit_ = (29, 19)
+2) Pass custom parameters (size, seed, etc.):
+    - width, height: maze dimensions (int)
+    - seed: int or None (None => random)
+    - perfect: bool (True => perfect maze; False => may create loops)
+    - algorithm: "dfs" or "prim"
+    - density: float (used when perfect=False)
 
-maze = gen.generate(entry=entry, exit=exit_)
-path = gen.solve(maze=maze, entry=entry, exit=exit_)
-
-Parameters
-----------
-- width, height: maze dimensions (int)
-- seed: int or None (None => random)
-- perfect: bool (True => perfect maze; False => may create loops)
-- algorithm: "dfs" or "prim" (if implemented)
-- density: float (used when perfect=False)
-
-Accessing the structure
------------------------
-- maze.width, maze.height
-- maze.cells[y][x]: int bitmask in 0..15
-  Bits: N=1, E=2, S=4, W=8 (bit set => wall is CLOSED)
-- "42" stamp: maze.omitted_42 and maze.stamp42 (if present)
+3) Access the generated structure and a solution:
+    - maze.width, maze.height
+    - maze.cells[y][x]: int bitmask in 0..15
+      Bits: N=1, E=2, S=4, W=8 (bit set => wall is CLOSED)
+    - "42" stamp: maze.omitted_42 and maze.stamp42 (if present)
+    - path: list of moves like ["N", "E", ...] from solve(...)
 
 Packaging note
 --------------
-This file must be packagable as `mazegen-*` (.whl or .tar.gz) and installable
+This file must be packagable as mazegen-* (.whl or .tar.gz) and installable
 via pip.
 """
 
