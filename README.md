@@ -4,8 +4,8 @@
 
 ## Description
 **A-Maze-ing** is a maze generation and solving system developed as part of the
-42 curriculum. The project focuses on procedural maze generation, constraint
-enforcement (including the mandatory "42 stamp"), shortest-path solving, and
+42 curriculum. The project focuses on maze generation, constraint enforcement
+ (including the mandatory "42 stamp"), shortest-path solving, and
 interactive ASCII visualization.
 
 ### Goals
@@ -102,6 +102,27 @@ Once the maze is displayed, the following commands are available:
 | `A` | Toggle maze generation animation (step-by-step generation display) |
 | `g` | Toggle between DFS and Prim generation algorithms |
 | `q` | Quit the program |
+
+### Solved Maze Preview
+
+![Solved maze preview (captured from project output)](assets/solved-maze-real.png)
+
+### Animations
+
+#### Maze Generation Algorithms
+
+Compare the two generation algorithms side-by-side:
+
+| DFS (Depth-First Search) | Prim's Algorithm |
+|:-:|:-:|
+| ![DFS maze generation](assets/maze-generation-dfs.gif) | ![Prim maze generation](assets/maze-generation-prim.gif) |
+| Fast, intuitive, creates long corridors | Different visual character, frontier-based |
+
+#### Maze Solving
+
+Watch the BFS pathfinding algorithm find the shortest path:
+
+![Maze solving animation](assets/maze-solving.gif)
 
 ---
 
@@ -304,7 +325,7 @@ renderer.run(maze, path, gen, cfg)
 
 ### What Worked Well
 
-✅ **Modular Architecture**: Clean separation of concerns (generation, solving, rendering, config)
+✅ **Modular Architecture**: Clean separation of concerns (config, generation, solving, rendering)
 ✅ **Test Suite**: Comprehensive 52 test coverage including edge cases and constraint validation
 ✅ **Algorithm Extensibility**: Easy to add new algorithms without modifying core logic
 ✅ **Animation System**: Flexible step-by-step generation/solving enables educational visualization
@@ -315,9 +336,8 @@ renderer.run(maze, path, gen, cfg)
 
 ⚠️ **Configuration Validation**: Could add schema validation framework (e.g., Pydantic) for more robust parsing
 ⚠️ **Performance**: Large mazes (>100×100) could benefit from parallel constraint checking
-⚠️ **Display Formats**: Only ASCII currently supported; JSON/image export would be valuable
-⚠️ **Documentation**: Algorithm complexity analysis and performance benchmarks would help users choose between DFS/Prim
-⚠️ **GUI Alternative**: Terminal UI is functional but a graphical interface would improve accessibility
+⚠️ **Display Formats**: Only ASCII currently supported; JSON/image export would be a nice option
+⚠️ **GUI Alternative**: Terminal UI is functional but a graphical interface would be an improvement
 
 ### Tools & Technologies Used
 
