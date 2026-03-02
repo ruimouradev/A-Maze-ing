@@ -1,28 +1,15 @@
 # ============================================================
 # File: config.py
 #
-# OWNER:
-#   Alexandre
-#
 # ROLE:
 #   Parse and validate configuration file.
 #
-# ALEXANDRE MUST (obrigatório):
 #   1) Read KEY=VALUE lines
 #   2) Ignore comments (#) and empty lines
 #   3) Validate required keys
 #   4) Convert types (int, bool, tuple)
 #   5) Raise clear ValueError messages
 #
-# BONUS:
-#   - SEED (int | None)
-#   - ALGORITHM (str): dfs|prim|kruskal|wilson
-#   - DISPLAY (str): ascii
-#   - ANIMATE (bool) legacy toggle
-#   - ANIMATE_SOLVER (bool)
-#   - ANIMATE_GENERATION (bool)
-#   - STEP_DELAY_MS (int)
-#   - DENSITY (float)
 
 from __future__ import annotations
 

@@ -1,13 +1,9 @@
 # ============================================================
 # File: renderer_ascii.py
 #
-# OWNER:
-#   Alexandre
-#
-# ROLE:
+
 #   Terminal ASCII visualization and interaction.
 #
-# ALEXANDRE MUST (mandatory): All done
 #   1) Render maze walls
 #   2) Render entry and exit
 #   3) Toggle solution path

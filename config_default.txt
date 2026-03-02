@@ -8,7 +8,7 @@ PERFECT=False
 
 # Bonus-ready extras (optional; safe defaults exist)
 SEED=42
-ALGORITHM=dfs         # dfs|prim|kruskal|wilson
+ALGORITHM=dfs         # dfs|prim
 DISPLAY=ascii         # ascii (recommended)
 ANIMATE=False         # legacy toggle (applies to both solver & generator)
 ANIMATE_SOLVER=False  # animate solver pathfinding steps

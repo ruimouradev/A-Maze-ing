@@ -1,6 +1,0 @@
-include README_MAZEGEN.md
-include pyproject.toml
-include mazegen.py
-
-prune tests
-exclude README.md

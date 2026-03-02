@@ -1,13 +1,9 @@
 # ============================================================
 # File: a_maze_ing.py
 #
-# OWNER:
-#   Alexandre
-#
 # ROLE:
 #   Entry point and program orchestration.
 #
-# ALEXANDRE MUST (obrigatório):
 #   1) Parse CLI args (sys.argv) -> config path
 #   2) Call load_config()
 #   3) Instantiate MazeGenerator
@@ -15,13 +11,9 @@
 #   5) Call write_output_file()
 #   6) Launch ASCII renderer loop
 #
-# BONUS hooks:
+# BONUS:
 #   - Support animation toggles (solver/generation)
 #   - Support changing algorithm at runtime via renderer commands
-#
-# MUST NOT:
-#   - Implement algorithms
-#   - Modify maze internals directly
 
 from __future__ import annotations
 

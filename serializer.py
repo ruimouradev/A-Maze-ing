@@ -1,13 +1,9 @@
 # ============================================================
 # File: serializer.py
 #
-# OWNER:
-#   Alexandre
-#
 # ROLE:
 #   Serialize maze output in the exact subject format.
 #
-# ALEXANDRE MUST:
 #   1) Convert wall masks (0..15) to ONE hex digit per cell
 #   2) Write grid row by row (one line per row)
 #   3) Write blank line
@@ -15,8 +11,6 @@
 #   5) Write exit as 'x,y'
 #   6) Write solution path as a string like 'NNEESW'
 #
-# BONUS:
-#   - Optional debug info only if the subject allows (default: none).
 
 from __future__ import annotations
 from mazegen import Maze
